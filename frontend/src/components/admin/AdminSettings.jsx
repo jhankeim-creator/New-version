@@ -8,7 +8,7 @@ import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { CartContext } from '../../App';
-import { Plus, Trash2, Save, Settings, Link as LinkIcon, Bell, Mail, CreditCard } from 'lucide-react';
+import { Plus, Trash2, Save, Settings, Link as LinkIcon, Bell, Mail, CreditCard, Eye, EyeOff, Key } from 'lucide-react';
 
 const AdminSettings = () => {
   const { API, token } = useContext(CartContext);

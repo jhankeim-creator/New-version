@@ -139,7 +139,8 @@ class StripeService:
                     "status": "pending"
                 }
             else:
-                return {"success": False, "error": link_response.text}
+                logger.error(f"Stripe payment link creation failed: {link_response.text}")
+                return {"success": False, "error": f"Failed to create payment link: {link_response.text}"}
                 
         except Exception as e:
             logger.error(f"Stripe payment link creation failed: {str(e)}")

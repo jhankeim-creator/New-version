@@ -18,16 +18,18 @@ class StripeService:
         ROOT_DIR = Path(__file__).parent
         load_dotenv(ROOT_DIR / '.env')
         
-        self.api_key = os.environ.get('STRIPE_SECRET_KEY', 'your_stripe_secret_key')
-        self.publishable_key = os.environ.get('STRIPE_PUBLISHABLE_KEY', 'your_stripe_publishable_key')
         self.base_url = "https://api.stripe.com/v1"
-        self.is_demo = self.api_key == 'your_stripe_secret_key'
         
-        logger.info(f"Stripe Service initialized - Demo mode: {self.is_demo}")
-        if not self.is_demo:
-            logger.info(f"Using Stripe API key: {self.api_key[:20]}...")
-        else:
-            logger.info("Using demo Stripe configuration")
+        # Log initialization
+        logger.info("Stripe Service initialized")
+    
+    def _get_api_keys(self):
+        """Get API keys dynamically from environment (allows runtime updates)"""
+        api_key = os.environ.get('STRIPE_SECRET_KEY', 'your_stripe_secret_key')
+        publishable_key = os.environ.get('STRIPE_PUBLISHABLE_KEY', 'your_stripe_publishable_key')
+        is_demo = api_key == 'your_stripe_secret_key' or not api_key or api_key.strip() == ''
+        
+        return api_key, publishable_key, is_demo
     
     async def create_payment_link(
         self,

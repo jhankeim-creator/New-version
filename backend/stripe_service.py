@@ -149,7 +149,10 @@ class StripeService:
     async def verify_payment(self, session_id: str) -> Dict:
         """Vérifier le statut d'un paiement Stripe"""
         
-        if self.is_demo:
+        # Get keys dynamically
+        api_key, publishable_key, is_demo = self._get_api_keys()
+        
+        if is_demo:
             return {
                 "success": True,
                 "demo_mode": True,
@@ -160,7 +163,7 @@ class StripeService:
         try:
             response = requests.get(
                 f"{self.base_url}/checkout/sessions/{session_id}",
-                auth=(self.api_key, ""),
+                auth=(api_key, ""),
                 timeout=30
             )
             

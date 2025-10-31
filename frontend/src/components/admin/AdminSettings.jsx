@@ -99,6 +99,9 @@ const AdminSettings = () => {
       } else if (activeTab === 'bulk-email') {
         const res = await axios.get(`${API}/admin/settings/bulk-emails`, { headers });
         setBulkEmailHistory(res.data);
+      } else if (activeTab === 'api-keys') {
+        const res = await axios.get(`${API}/admin/api-settings`, { headers });
+        setApiKeys(res.data);
       }
     } catch (error) {
       console.error('Failed to load data:', error);

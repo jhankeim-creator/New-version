@@ -758,6 +758,193 @@ const AdminSettings = () => {
           </Card>
         </div>
       )}
+
+      {/* API Keys Tab */}
+      {activeTab === 'api-keys' && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Key className="h-5 w-5 mr-2" />
+                API Keys & Integration Settings
+              </CardTitle>
+              <p className="text-sm text-gray-500 mt-2">
+                Configure your payment gateways and email service API keys. These keys are stored securely.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              
+              {/* Stripe Settings */}
+              <div className="border-b pb-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <CreditCard className="h-5 w-5 mr-2 text-blue-600" />
+                  Stripe Payment Gateway
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <Label>Stripe Secret Key</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type={showKeys.stripe_secret_key ? 'text' : 'password'}
+                        value={apiKeys.stripe_secret_key}
+                        onChange={(e) => setApiKeys({ ...apiKeys, stripe_secret_key: e.target.value })}
+                        placeholder="sk_test_..."
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleShowKey('stripe_secret_key')}
+                      >
+                        {showKeys.stripe_secret_key ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Stripe Publishable Key</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type={showKeys.stripe_publishable_key ? 'text' : 'password'}
+                        value={apiKeys.stripe_publishable_key}
+                        onChange={(e) => setApiKeys({ ...apiKeys, stripe_publishable_key: e.target.value })}
+                        placeholder="pk_test_..."
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleShowKey('stripe_publishable_key')}
+                      >
+                        {showKeys.stripe_publishable_key ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Plisio Settings */}
+              <div className="border-b pb-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <CreditCard className="h-5 w-5 mr-2 text-purple-600" />
+                  Plisio Crypto Payment Gateway
+                </h3>
+                <div>
+                  <Label>Plisio API Key</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type={showKeys.plisio_api_key ? 'text' : 'password'}
+                      value={apiKeys.plisio_api_key}
+                      onChange={(e) => setApiKeys({ ...apiKeys, plisio_api_key: e.target.value })}
+                      placeholder="Enter Plisio API key"
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleShowKey('plisio_api_key')}
+                    >
+                      {showKeys.plisio_api_key ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* SMTP Settings */}
+              <div>
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <Mail className="h-5 w-5 mr-2 text-green-600" />
+                  Email Service (SMTP) Configuration
+                </h3>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>SMTP Host</Label>
+                      <Input
+                        value={apiKeys.smtp_host}
+                        onChange={(e) => setApiKeys({ ...apiKeys, smtp_host: e.target.value })}
+                        placeholder="smtp.gmail.com"
+                      />
+                    </div>
+                    <div>
+                      <Label>SMTP Port</Label>
+                      <Input
+                        type="number"
+                        value={apiKeys.smtp_port}
+                        onChange={(e) => setApiKeys({ ...apiKeys, smtp_port: parseInt(e.target.value) })}
+                        placeholder="587"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>SMTP Username (Email)</Label>
+                    <Input
+                      value={apiKeys.smtp_user}
+                      onChange={(e) => setApiKeys({ ...apiKeys, smtp_user: e.target.value })}
+                      placeholder="your-email@gmail.com"
+                    />
+                  </div>
+                  <div>
+                    <Label>SMTP Password / App Password</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type={showKeys.smtp_password ? 'text' : 'password'}
+                        value={apiKeys.smtp_password}
+                        onChange={(e) => setApiKeys({ ...apiKeys, smtp_password: e.target.value })}
+                        placeholder="Enter SMTP password or app password"
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleShowKey('smtp_password')}
+                      >
+                        {showKeys.smtp_password ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>From Email</Label>
+                      <Input
+                        value={apiKeys.from_email}
+                        onChange={(e) => setApiKeys({ ...apiKeys, from_email: e.target.value })}
+                        placeholder="noreply@kayee01.com"
+                      />
+                    </div>
+                    <div>
+                      <Label>From Name</Label>
+                      <Input
+                        value={apiKeys.from_name}
+                        onChange={(e) => setApiKeys({ ...apiKeys, from_name: e.target.value })}
+                        placeholder="Kayee01"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Save Button */}
+              <div className="pt-4 border-t">
+                <Button 
+                  onClick={saveApiKeys} 
+                  className="bg-[#d4af37] hover:bg-[#b8941f]"
+                  disabled={loading}
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  {loading ? 'Saving...' : 'Save API Settings'}
+                </Button>
+                <p className="text-xs text-gray-500 mt-2">
+                  Note: API keys are encrypted and stored securely. Changes take effect immediately.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 };

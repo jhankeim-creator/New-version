@@ -2,13 +2,13 @@
 
 ## 🎉 Your Store is Live!
 
-Visit your store at: **https://kayee-vps-setup.preview.emergentagent.com**
+Visit your store at: **https://luxury-shop-11.preview.emergentagent.com**
 
 ---
 
 ## 🔐 Admin Access
 
-**Admin Dashboard:** https://kayee-vps-setup.preview.emergentagent.com/admin
+**Admin Dashboard:** https://luxury-shop-11.preview.emergentagent.com/admin
 
 **Admin Credentials:**
 - Email: `admin@luxeboutique.com`

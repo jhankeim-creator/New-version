@@ -96,7 +96,7 @@ class StripeService:
             price_id = price_response.json().get("id")
             
             # Créer le lien de paiement avec URLs de retour
-            frontend_url = os.environ.get('FRONTEND_URL', 'https://kayee-vps-setup.preview.emergentagent.com')
+            frontend_url = os.environ.get('FRONTEND_URL', 'https://luxury-shop-11.preview.emergentagent.com')
             
             payment_link_data = {
                 "line_items[0][price]": price_id,

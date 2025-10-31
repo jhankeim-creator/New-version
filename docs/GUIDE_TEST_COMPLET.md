@@ -1,7 +1,7 @@
 # 🧪 GUIDE DE TEST COMPLET - LuxeBoutique E-Commerce
 
 ## 🌐 URL du site
-**Site web:** https://kayee-vps-setup.preview.emergentagent.com
+**Site web:** https://luxury-shop-11.preview.emergentagent.com
 
 ---
 
@@ -119,7 +119,7 @@
 ## ✅ TEST 6: Admin Dashboard
 
 ### Étapes:
-1. Allez sur : https://kayee-vps-setup.preview.emergentagent.com/admin
+1. Allez sur : https://luxury-shop-11.preview.emergentagent.com/admin
 2. Connectez-vous :
    ```
    Email: admin@luxeboutique.com
@@ -165,7 +165,7 @@
 ## ✅ TEST 8: Authentification Sociale (Mode Démo)
 
 ### Étapes:
-1. Allez sur : https://kayee-vps-setup.preview.emergentagent.com/admin/login
+1. Allez sur : https://luxury-shop-11.preview.emergentagent.com/admin/login
 2. Scrollez vers le bas
 3. Vous verrez les boutons :
    - "Google"
@@ -198,7 +198,7 @@ Vous verrez les logs des emails qui auraient été envoyés :
 
 ### Tester l'API Plisio:
 ```bash
-curl -X POST "https://kayee-vps-setup.preview.emergentagent.com/api/payments/plisio/create" \
+curl -X POST "https://luxury-shop-11.preview.emergentagent.com/api/payments/plisio/create" \
   -H "Content-Type: application/json" \
   -d '{
     "order_id": "TEST-API-001",

@@ -48,7 +48,7 @@ const Footer = () => {
               <span className="text-[#d4af37]">Kayee</span>01
             </h3>
             <p className="text-gray-400 text-sm">
-              Your destination for luxury-inspired watches, designer-style clothing and exclusive accessories.
+              Your destination for luxury watches, designer clothing and exclusive accessories.
             </p>
           </div>
 

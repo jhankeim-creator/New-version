@@ -73,13 +73,14 @@ class StripeService:
             
             product_response = requests.post(
                 f"{self.base_url}/products",
-                auth=(self.api_key, ""),
+                auth=(api_key, ""),
                 data=product_data,
                 timeout=30
             )
             
             if product_response.status_code != 200:
-                return {"success": False, "error": "Failed to create product"}
+                logger.error(f"Stripe product creation failed: {product_response.text}")
+                return {"success": False, "error": f"Failed to create product: {product_response.text}"}
             
             product_id = product_response.json().get("id")
             
@@ -92,13 +93,14 @@ class StripeService:
             
             price_response = requests.post(
                 f"{self.base_url}/prices",
-                auth=(self.api_key, ""),
+                auth=(api_key, ""),
                 data=price_data,
                 timeout=30
             )
             
             if price_response.status_code != 200:
-                return {"success": False, "error": "Failed to create price"}
+                logger.error(f"Stripe price creation failed: {price_response.text}")
+                return {"success": False, "error": f"Failed to create price: {price_response.text}"}
             
             price_id = price_response.json().get("id")
             
@@ -119,7 +121,7 @@ class StripeService:
             
             link_response = requests.post(
                 f"{self.base_url}/payment_links",
-                auth=(self.api_key, ""),
+                auth=(api_key, ""),
                 data=payment_link_data,
                 timeout=30
             )

@@ -146,6 +146,10 @@ const AdminDashboard = () => {
                 <TabsContent value="settings">
                   <AdminSettings />
                 </TabsContent>
+
+                <TabsContent value="api-settings">
+                  <AdminAPISettings />
+                </TabsContent>
               </Tabs>
             </CardContent>
           </Card>

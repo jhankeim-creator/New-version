@@ -13,7 +13,7 @@ const RefundPolicy = () => {
             <section>
               <h2 className="text-2xl font-bold mb-4">Our Commitment to Quality</h2>
               <p className="text-gray-700 leading-relaxed">
-                We stand behind the quality of our replica products. Every item undergoes strict quality control before shipping to ensure it meets our high standards. Customer satisfaction is our priority.
+                We stand behind the quality of our products. Every item undergoes strict quality control before shipping to ensure it meets our high standards. Customer satisfaction is our priority.
               </p>
             </section>
 

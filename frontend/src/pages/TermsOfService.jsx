@@ -20,13 +20,13 @@ const TermsOfService = () => {
             <section>
               <h2 className="text-2xl font-bold mb-4">2. Product Disclaimer</h2>
               <p className="text-gray-700 leading-relaxed">
-                All products sold on this website are replica items intended for personal use only. These are not genuine branded products. We clearly state that our products are replicas and do not attempt to deceive customers about their nature.
+                All products sold on this website are fashion items intended for personal use only. We offer high-quality fashion watches, jewelry, clothing and accessories at affordable prices.
               </p>
               <ul className="list-disc ml-6 text-gray-700 space-y-2">
-                <li>Products are high-quality replicas designed to resemble genuine articles</li>
-                <li>We do not claim our products are authentic or original brand items</li>
-                <li>All product descriptions clearly indicate replica status</li>
-                <li>Customers acknowledge they are purchasing replica products</li>
+                <li>Products are carefully selected for quality and style</li>
+                <li>We offer designer-style fashion at accessible prices</li>
+                <li>All product descriptions provide accurate details</li>
+                <li>Customers acknowledge they understand product descriptions</li>
               </ul>
             </section>
 

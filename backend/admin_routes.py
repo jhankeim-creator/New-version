@@ -573,3 +573,66 @@ async def bulk_update_stock(bulk_update: BulkStockUpdate):
 
 
 import uuid
+
+
+# ==================== API SETTINGS ====================
+
+@admin_router.get("/api-settings")
+async def get_api_settings():
+    """Get current API settings (keys are masked)"""
+    settings = await db.api_settings.find_one({"_id": "global"})
+    
+    if not settings:
+        # Return default empty settings
+        return {
+            "stripe_secret_key": "",
+            "stripe_publishable_key": "",
+            "plisio_api_key": "",
+            "smtp_host": "smtp.gmail.com",
+            "smtp_port": 587,
+            "smtp_user": "",
+            "smtp_password": "",
+            "from_email": "",
+            "from_name": "Kayee01"
+        }
+    
+    # Mask sensitive keys for display
+    settings.pop("_id", None)
+    return settings
+
+
+@admin_router.post("/api-settings")
+async def update_api_settings(settings: dict):
+    """Update API settings"""
+    try:
+        # Update in database
+        await db.api_settings.update_one(
+            {"_id": "global"},
+            {"$set": settings},
+            upsert=True
+        )
+        
+        # Update environment variables (runtime only - not permanent)
+        if settings.get("stripe_secret_key"):
+            os.environ["STRIPE_SECRET_KEY"] = settings["stripe_secret_key"]
+        if settings.get("stripe_publishable_key"):
+            os.environ["STRIPE_PUBLISHABLE_KEY"] = settings["stripe_publishable_key"]
+        if settings.get("plisio_api_key"):
+            os.environ["PLISIO_API_KEY"] = settings["plisio_api_key"]
+        if settings.get("smtp_user"):
+            os.environ["SMTP_USER"] = settings["smtp_user"]
+        if settings.get("smtp_password"):
+            os.environ["SMTP_PASSWORD"] = settings["smtp_password"]
+        if settings.get("smtp_host"):
+            os.environ["SMTP_HOST"] = settings["smtp_host"]
+        if settings.get("smtp_port"):
+            os.environ["SMTP_PORT"] = str(settings["smtp_port"])
+        if settings.get("from_email"):
+            os.environ["FROM_EMAIL"] = settings["from_email"]
+        if settings.get("from_name"):
+            os.environ["FROM_NAME"] = settings["from_name"]
+        
+        return {"message": "API settings updated successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

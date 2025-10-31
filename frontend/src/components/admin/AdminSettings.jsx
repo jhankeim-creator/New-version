@@ -294,6 +294,25 @@ const AdminSettings = () => {
     }
   };
 
+  // API Keys Functions
+  const saveApiKeys = async () => {
+    try {
+      setLoading(true);
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.post(`${API}/admin/api-settings`, apiKeys, { headers });
+      toast.success('API keys updated successfully');
+    } catch (error) {
+      console.error('Failed to save API keys:', error);
+      toast.error('Failed to save API keys');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleShowKey = (keyName) => {
+    setShowKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }));
+  };
+
   const tabs = [
     { id: 'payment', label: 'Payment Gateways', icon: CreditCard },
     { id: 'social', label: 'Social Links', icon: LinkIcon },

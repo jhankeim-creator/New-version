@@ -208,19 +208,6 @@ class Order(BaseModel):
     shipping_address: dict
     shipping_method: Optional[str] = "free"  # free or fedex
     shipping_cost: Optional[float] = 0.0
-
-# API Settings model
-class APISettings(BaseModel):
-    stripe_secret_key: Optional[str] = ""
-    stripe_publishable_key: Optional[str] = ""
-    plisio_api_key: Optional[str] = ""
-    smtp_host: Optional[str] = "smtp.gmail.com"
-    smtp_port: Optional[int] = 587
-    smtp_user: Optional[str] = ""
-    smtp_password: Optional[str] = ""
-    from_email: Optional[str] = ""
-    from_name: Optional[str] = "Kayee01"
-
     phone: str
     notes: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -247,6 +234,18 @@ class APISettings(BaseModel):
     binance_order_id: Optional[str] = None
     binance_checkout_url: Optional[str] = None
     binance_qr_code: Optional[str] = None
+
+# API Settings model
+class APISettings(BaseModel):
+    stripe_secret_key: Optional[str] = ""
+    stripe_publishable_key: Optional[str] = ""
+    plisio_api_key: Optional[str] = ""
+    smtp_host: Optional[str] = "smtp.gmail.com"
+    smtp_port: Optional[int] = 587
+    smtp_user: Optional[str] = ""
+    smtp_password: Optional[str] = ""
+    from_email: Optional[str] = ""
+    from_name: Optional[str] = "Kayee01"
 
 class OrderCreate(BaseModel):
     user_email: str

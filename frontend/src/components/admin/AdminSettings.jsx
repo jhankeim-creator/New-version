@@ -297,6 +297,7 @@ const AdminSettings = () => {
     { id: 'external', label: 'External Links', icon: LinkIcon },
     { id: 'announcement', label: 'Floating Announcement', icon: Bell },
     { id: 'bulk-email', label: 'Bulk Email', icon: Mail },
+    { id: 'api-keys', label: 'API Keys', icon: Settings },
   ];
 
   return (

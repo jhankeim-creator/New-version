@@ -16,7 +16,7 @@ import AdminSettings from '../components/admin/AdminSettings';
 import AdminTeam from '../components/admin/AdminTeam';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Package, ShoppingCart, Users, DollarSign, Home, LayoutDashboard, Tag, UserCircle, FolderTree, Settings, Plus, UsersRound, Key } from 'lucide-react';
+import { Package, ShoppingCart, Users, DollarSign, Home, LayoutDashboard, Tag, UserCircle, FolderTree, Settings, Plus, UsersRound } from 'lucide-react';
 
 const AdminDashboard = () => {
   const { user, token, API } = useContext(CartContext);

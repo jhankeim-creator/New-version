@@ -45,7 +45,10 @@ class StripeService:
         Documentation: https://docs.stripe.com/api/payment_links/payment_links/create
         """
         
-        if self.is_demo:
+        # Get keys dynamically each time
+        api_key, publishable_key, is_demo = self._get_api_keys()
+        
+        if is_demo:
             logger.info(f"💳 Stripe Demo Mode - Payment Link:")
             logger.info(f"Order: {order_id}, Amount: ${amount}")
             
@@ -58,6 +61,8 @@ class StripeService:
                 "currency": currency,
                 "status": "pending"
             }
+        
+        logger.info(f"Using Stripe API key: {api_key[:20]}... for order {order_id}")
         
         try:
             # Create product with order details

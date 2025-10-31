@@ -103,11 +103,6 @@ const AdminDashboard = () => {
                     <Settings className="h-4 w-4" />
                     Settings
                   </TabsTrigger>
-
-                  <TabsTrigger value="api-settings" data-testid="tab-api-settings" className="flex items-center gap-2">
-                    <Key className="h-4 w-4" />
-                    API Keys
-                  </TabsTrigger>
                 </TabsList>
                 
                 <TabsContent value="dashboard">

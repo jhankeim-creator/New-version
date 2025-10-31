@@ -103,10 +103,10 @@ const HomePage = () => {
               className="text-5xl md:text-7xl font-bold text-white mb-6"
               style={{ fontFamily: 'Playfair Display' }}
             >
-              Luxury-Inspired Watches & Fashion
+              Luxury Watches & Fashion
             </h1>
             <p className="text-xl md:text-2xl text-white mb-8">
-              Designer-Style Watches, Clothing & Accessories
+              Designer Watches, Clothing & Accessories
             </p>
             <Button
               onClick={() => navigate('/shop')}

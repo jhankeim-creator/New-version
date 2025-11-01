@@ -685,7 +685,7 @@ class EmailService:
                     <div style="margin: 30px 0; padding: 20px; background: #fff8e1; border-left: 4px solid #d4af37; border-radius: 5px;">
                         <p style="margin: 0; color: #856404;"><strong>💎 Why Choose Kayee01?</strong></p>
                         <ul style="margin: 10px 0 0 0; padding-left: 20px; color: #856404;">
-                            <li>High-quality 1:1 replicas</li>
+                            <li>Premium luxury-inspired designs</li>
                             <li>15% OFF with cryptocurrency</li>
                             <li>Fast & secure shipping worldwide</li>
                         </ul>

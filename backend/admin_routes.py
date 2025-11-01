@@ -608,26 +608,35 @@ async def get_api_settings():
 async def update_api_settings(settings: dict):
     """Update API settings"""
     try:
-        # Update in database
+        # Define allowed fields (NO SMTP fields)
+        allowed_fields = {
+            "resend_api_key", "stripe_secret_key", "stripe_publishable_key", 
+            "plisio_api_key", "from_email", "from_name"
+        }
+        
+        # Filter incoming settings to only allowed fields
+        filtered_settings = {k: v for k, v in settings.items() if k in allowed_fields}
+        
+        # Update in database (only allowed fields)
         await db.api_settings.update_one(
             {"_id": "global"},
-            {"$set": settings},
+            {"$set": filtered_settings},
             upsert=True
         )
         
         # Update environment variables (runtime only - not permanent)
-        if settings.get("resend_api_key"):
-            os.environ["RESEND_API_KEY"] = settings["resend_api_key"]
-        if settings.get("stripe_secret_key"):
-            os.environ["STRIPE_SECRET_KEY"] = settings["stripe_secret_key"]
-        if settings.get("stripe_publishable_key"):
-            os.environ["STRIPE_PUBLISHABLE_KEY"] = settings["stripe_publishable_key"]
-        if settings.get("plisio_api_key"):
-            os.environ["PLISIO_API_KEY"] = settings["plisio_api_key"]
-        if settings.get("from_email"):
-            os.environ["FROM_EMAIL"] = settings["from_email"]
-        if settings.get("from_name"):
-            os.environ["FROM_NAME"] = settings["from_name"]
+        if filtered_settings.get("resend_api_key"):
+            os.environ["RESEND_API_KEY"] = filtered_settings["resend_api_key"]
+        if filtered_settings.get("stripe_secret_key"):
+            os.environ["STRIPE_SECRET_KEY"] = filtered_settings["stripe_secret_key"]
+        if filtered_settings.get("stripe_publishable_key"):
+            os.environ["STRIPE_PUBLISHABLE_KEY"] = filtered_settings["stripe_publishable_key"]
+        if filtered_settings.get("plisio_api_key"):
+            os.environ["PLISIO_API_KEY"] = filtered_settings["plisio_api_key"]
+        if filtered_settings.get("from_email"):
+            os.environ["FROM_EMAIL"] = filtered_settings["from_email"]
+        if filtered_settings.get("from_name"):
+            os.environ["FROM_NAME"] = filtered_settings["from_name"]
         
         return {"message": "API settings updated successfully"}
     except Exception as e:

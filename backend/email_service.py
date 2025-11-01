@@ -6,7 +6,8 @@ import logging
 from dotenv import load_dotenv
 from pathlib import Path
 from datetime import datetime, timezone
-from datetime import datetime, timezone
+import resend
+import asyncio
 
 # Load environment variables
 ROOT_DIR = Path(__file__).parent
@@ -16,6 +17,15 @@ logger = logging.getLogger(__name__)
 
 class EmailService:
     def __init__(self):
+        # Resend configuration
+        self.resend_api_key = os.environ.get('RESEND_API_KEY', '')
+        self.use_resend = bool(self.resend_api_key)
+        
+        if self.use_resend:
+            resend.api_key = self.resend_api_key
+            logger.info("✓ Resend email service initialized")
+        
+        # SMTP configuration (fallback)
         self.smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
         self.smtp_port = int(os.environ.get('SMTP_PORT', '587'))
         self.smtp_user = os.environ.get('SMTP_USER', '')
@@ -23,12 +33,78 @@ class EmailService:
         self.from_email = os.environ.get('FROM_EMAIL', 'noreply@kayee01.com')
         self.from_name = os.environ.get('FROM_NAME', 'Kayee01')
         
-        logger.info(f"EmailService initialized - SMTP User: {self.smtp_user}, Host: {self.smtp_host}")
+        if self.smtp_user:
+            logger.info(f"✓ SMTP fallback configured - User: {self.smtp_user}, Host: {self.smtp_host}")
     
     async def send_email(self, to_email: str, subject: str, html_content: str):
-        """Send an email using SMTP"""
+        """Send an email using Resend (primary) or SMTP (fallback)"""
         try:
-            logger.info(f"Attempting to send email to {to_email}")
+            # Try Resend first if configured
+            if self.use_resend:
+                try:
+                    logger.info(f"Attempting to send email via Resend to {to_email}")
+                    
+                    # Run Resend in thread pool to avoid blocking
+                    loop = asyncio.get_event_loop()
+                    result = await loop.run_in_executor(
+                        None,
+                        self._send_via_resend,
+                        to_email,
+                        subject,
+                        html_content
+                    )
+                    
+                    if result:
+                        logger.info(f"✓ Email sent successfully via Resend to {to_email}")
+                        return True
+                    else:
+                        logger.warning(f"⚠ Resend failed, trying SMTP fallback...")
+                        
+                except Exception as resend_error:
+                    logger.error(f"Resend error: {str(resend_error)}")
+                    logger.info("Falling back to SMTP...")
+            
+            # Fallback to SMTP
+            if self.smtp_user and self.smtp_password:
+                return await self._send_via_smtp(to_email, subject, html_content)
+            else:
+                logger.error("No email service configured (neither Resend nor SMTP)")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Failed to send email to {to_email}: {str(e)}")
+            logger.error(f"Error type: {type(e).__name__}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return False
+    
+    def _send_via_resend(self, to_email: str, subject: str, html_content: str) -> bool:
+        """Send email via Resend API (synchronous)"""
+        try:
+            params = {
+                "from": f"{self.from_name} <{self.from_email}>",
+                "to": [to_email],
+                "subject": subject,
+                "html": html_content
+            }
+            
+            response = resend.Emails.send(params)
+            
+            # Check if successful
+            if hasattr(response, 'id'):
+                logger.info(f"✓ Resend email ID: {response.id}")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Resend API error: {str(e)}")
+            return False
+    
+    async def _send_via_smtp(self, to_email: str, subject: str, html_content: str):
+        """Send email via SMTP (async)"""
+        try:
+            logger.info(f"Attempting to send email via SMTP to {to_email}")
             logger.info(f"SMTP Config: {self.smtp_host}:{self.smtp_port}, User: {self.smtp_user}")
             
             message = MIMEMultipart('alternative')
@@ -48,11 +124,10 @@ class EmailService:
                 username=self.smtp_user,
                 password=self.smtp_password
             )
-            logger.info(f"✓ Email sent successfully to {to_email}")
+            logger.info(f"✓ Email sent successfully via SMTP to {to_email}")
             return True
         except Exception as e:
-            logger.error(f"Failed to send email to {to_email}: {str(e)}")
-            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"SMTP error: {str(e)}")
             import traceback
             logger.error(f"Traceback: {traceback.format_exc()}")
             return False

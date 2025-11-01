@@ -238,13 +238,10 @@ class Order(BaseModel):
 
 # API Settings model
 class APISettings(BaseModel):
+    resend_api_key: Optional[str] = ""
     stripe_secret_key: Optional[str] = ""
     stripe_publishable_key: Optional[str] = ""
     plisio_api_key: Optional[str] = ""
-    smtp_host: Optional[str] = "smtp.gmail.com"
-    smtp_port: Optional[int] = 587
-    smtp_user: Optional[str] = ""
-    smtp_password: Optional[str] = ""
     from_email: Optional[str] = ""
     from_name: Optional[str] = "Kayee01"
 

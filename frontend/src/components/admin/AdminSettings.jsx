@@ -775,6 +775,39 @@ const AdminSettings = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               
+              {/* Resend Email Service */}
+              <div className="border-b pb-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <Mail className="h-5 w-5 mr-2 text-purple-600" />
+                  Resend Email Service (Recommended)
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <Label>Resend API Key</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type={showKeys.resend_api_key ? 'text' : 'password'}
+                        value={apiKeys.resend_api_key}
+                        onChange={(e) => setApiKeys({ ...apiKeys, resend_api_key: e.target.value })}
+                        placeholder="re_..."
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => toggleShowKey('resend_api_key')}
+                      >
+                        {showKeys.resend_api_key ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Get your API key from <a href="https://resend.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">resend.com/api-keys</a>. Free tier: 3,000 emails/month.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
               {/* Stripe Settings */}
               <div className="border-b pb-6">
                 <h3 className="text-lg font-semibold mb-4 flex items-center">

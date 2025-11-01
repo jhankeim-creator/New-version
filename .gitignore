@@ -208,3 +208,4 @@ KAYEE01-REAL-CREDENTIALS.env
 # Old import/test scripts
 add_*.py
 import_*.py
+frontend/node_modules/.cache/default-development/1.pack

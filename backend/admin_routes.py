@@ -16,6 +16,11 @@ from models import (
     BulkProductUpdate, BulkPriceUpdate, BulkStockUpdate
 )
 
+# Import authentication dependencies from server.py
+import sys
+sys.path.append('/app/backend')
+from server import User, get_current_admin
+
 # Create router
 admin_router = APIRouter(prefix="/admin", tags=["admin"])
 

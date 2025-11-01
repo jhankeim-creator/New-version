@@ -839,8 +839,12 @@ async def update_order_status(
     try:
         # Si le statut a changé
         if status != old_status:
+            order_dict = order_obj.model_dump()
+            # Ensure 'status' key exists for email templates
+            if 'status' not in order_dict:
+                order_dict['status'] = order_dict.get('order_status', 'pending')
             await email_service.send_order_status_update(
-                order_obj.model_dump(),
+                order_dict,
                 old_status
             )
         

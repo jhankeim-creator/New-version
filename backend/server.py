@@ -13,6 +13,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from passlib.context import CryptContext
 import jwt
+from jwt.exceptions import InvalidSignatureError, ExpiredSignatureError, DecodeError
 
 # Import payment services
 from email_service import email_service

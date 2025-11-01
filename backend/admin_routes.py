@@ -605,7 +605,7 @@ async def get_api_settings(admin: User = Depends(get_current_admin)):
 
 
 @admin_router.post("/api-settings")
-async def update_api_settings(settings: dict):
+async def update_api_settings(settings: dict, admin: User = Depends(get_current_admin)):
     """Update API settings"""
     try:
         # Define allowed fields (NO SMTP fields)

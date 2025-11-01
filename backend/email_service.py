@@ -599,7 +599,7 @@ class EmailService:
     
     async def send_welcome_email(self, to_email: str, user_name: str):
         """Send welcome email after registration"""
-        subject = "Welcome to Kayee01 - Luxury 1:1 Replica Watches & Accessories"
+        subject = "Welcome to Kayee01 - Luxury Fashion & Designer Accessories"
         
         html_content = f"""
         <!DOCTYPE html>
@@ -618,7 +618,7 @@ class EmailService:
                 <div style="padding: 30px 20px;">
                     <h2 style="color: #d4af37;">🎉 Welcome to Kayee01!</h2>
                     <p>Hello <strong>{user_name}</strong>,</p>
-                    <p>Thank you for joining Kayee01 - your destination for high-quality 1:1 replica luxury watches, clothing, and accessories.</p>
+                    <p>Thank you for joining Kayee01 - your destination for luxury-inspired fashion, designer-style watches, and premium accessories.</p>
                     
                     <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
                         <h3 style="margin-top: 0; color: #1a1a1a;">What's Next?</h3>

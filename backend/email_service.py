@@ -339,7 +339,7 @@ class EmailService:
                         <h1 style="margin: 0; font-family: 'Playfair Display', serif; font-size: 32px;">
                             <span style="color: #d4af37;">Kayee</span><span style="color: #1a1a1a;">01</span>
                         </h1>
-                        <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">High-Quality 1:1 Replica Watches & Accessories</p>
+                        <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">Luxury-Inspired Fashion & Accessories</p>
                     </div>
                     <div style="text-align: right;">
                         <h2 style="margin: 0; color: #1a1a1a; font-size: 28px;">INVOICE</h2>

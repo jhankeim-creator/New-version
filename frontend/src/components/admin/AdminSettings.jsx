@@ -882,60 +882,13 @@ const AdminSettings = () => {
                 </div>
               </div>
 
-              {/* SMTP Settings */}
+              {/* Email Sender Info */}
               <div>
                 <h3 className="text-lg font-semibold mb-4 flex items-center">
                   <Mail className="h-5 w-5 mr-2 text-green-600" />
-                  Email Service (SMTP) Configuration
+                  Email Sender Configuration
                 </h3>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label>SMTP Host</Label>
-                      <Input
-                        value={apiKeys.smtp_host}
-                        onChange={(e) => setApiKeys({ ...apiKeys, smtp_host: e.target.value })}
-                        placeholder="smtp.gmail.com"
-                      />
-                    </div>
-                    <div>
-                      <Label>SMTP Port</Label>
-                      <Input
-                        type="number"
-                        value={apiKeys.smtp_port}
-                        onChange={(e) => setApiKeys({ ...apiKeys, smtp_port: parseInt(e.target.value) })}
-                        placeholder="587"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <Label>SMTP Username (Email)</Label>
-                    <Input
-                      value={apiKeys.smtp_user}
-                      onChange={(e) => setApiKeys({ ...apiKeys, smtp_user: e.target.value })}
-                      placeholder="your-email@gmail.com"
-                    />
-                  </div>
-                  <div>
-                    <Label>SMTP Password / App Password</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        type={showKeys.smtp_password ? 'text' : 'password'}
-                        value={apiKeys.smtp_password}
-                        onChange={(e) => setApiKeys({ ...apiKeys, smtp_password: e.target.value })}
-                        placeholder="Enter SMTP password or app password"
-                        className="flex-1"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => toggleShowKey('smtp_password')}
-                      >
-                        {showKeys.smtp_password ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </Button>
-                    </div>
-                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <Label>From Email</Label>

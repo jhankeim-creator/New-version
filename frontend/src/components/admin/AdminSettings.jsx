@@ -68,10 +68,6 @@ const AdminSettings = () => {
     stripe_secret_key: '',
     stripe_publishable_key: '',
     plisio_api_key: '',
-    smtp_host: 'smtp.gmail.com',
-    smtp_port: 587,
-    smtp_user: '',
-    smtp_password: '',
     from_email: '',
     from_name: 'Kayee01'
   });

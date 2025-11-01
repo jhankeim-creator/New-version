@@ -1,227 +1,186 @@
-# Node modules
-node_modules/
-frontend/node_modules/
-frontend/.pnp
-frontend/.pnp.js
+# ==========================================
+# KAYEE01 E-COMMERCE - GITIGNORE
+# ==========================================
 
-# Testing
-frontend/coverage
+# ==========================================
+# SENSITIVE & SECURITY (KRITIK!)
+# ==========================================
+.env
+.env.local
+.env.production
+.env.development
+.env.test
+*.env
+!.env.example
+!.env.template
+!.env.CLEAN
 
-# Production
-frontend/build
+# API Keys & Credentials
+*credentials*
+*secrets*
+KAYEE01-REAL-CREDENTIALS.env
+*.pem
+*.key
+*.crt
+*.p12
 
-# Misc
-.DS_Store
-frontend/.env.local
-frontend/.env.development.local
-frontend/.env.test.local
-frontend/.env.production.local
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-*.log
-
-# Python
+# ==========================================
+# PYTHON / BACKEND
+# ==========================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-backend/__pycache__/
-backend/*.pyc
+build/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Virtual environments
 venv/
 ENV/
 env/
+.venv
 backend/venv/
 
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# ==========================================
+# NODE / FRONTEND
+# ==========================================
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+frontend/build
+frontend/dist
+.next/
+out/
+
+# Testing
+frontend/coverage
+
+# Cache
+frontend/node_modules/.cache/
+.cache/
+
+# ==========================================
+# UPLOADS & MEDIA
+# ==========================================
+backend/uploads/*
+!backend/uploads/.gitkeep
+!backend/uploads/README.md
+
+# Temp files
+*.tmp
+*.temp
+.tmp/
+temp/
+
+# ==========================================
+# OS SPECIFIC
+# ==========================================
+# Windows
+Thumbs.db
+Desktop.ini
+
+# MacOS
+.DS_Store
+.AppleDouble
+._*
+
+# Linux
+*~
+.directory
+
+# ==========================================
+# LOGS
+# ==========================================
+logs/
+*.log
+/var/log/
+
+# ==========================================
 # IDEs
+# ==========================================
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-project
+*.sublime-workspace
 
-# OS
-.DS_Store
-Thumbs.db
+# ==========================================
+# BACKUP & OLD FILES
+# ==========================================
+*.bak
+*.backup
+*.old
+*.orig
+*-backup
+backup/
+backups/
 
-# Emergent specific
+# ==========================================
+# DATABASE
+# ==========================================
+*.sqlite
+*.sqlite3
+*.db
+mongo-data/
+mongodb-data/
+dump/
+
+# ==========================================
+# DOCKER
+# ==========================================
+docker-compose.override.yml
+
+# ==========================================
+# DEPLOYMENT
+# ==========================================
+VPS-FINAL-COMPLETE/*.env
+!VPS-FINAL-COMPLETE/.env.template
+!VPS-FINAL-COMPLETE/.env.example
+!VPS-FINAL-COMPLETE/.env.CLEAN
+
+hostinger-vps/*.env
+!hostinger-vps/.env.example
+
+# ==========================================
+# EMERGENT SPECIFIC
+# ==========================================
 .emergent/
 test_result.md
 *_test.py
-admin_email_test.py
-french_review_test.py
 
-# Local env
-.env
-backend/.env.local
-frontend/node_modules/.cache/default-development/7.pack
-frontend/node_modules/.cache/default-development/5.pack
-frontend/node_modules/.cache/default-development/2.pack
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
-frontend/node_modules/.cache/default-development/0.pack
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
-VPS-FINAL-COMPLETE/frontend/node_modules/.cache/default-development/7.pack
-VPS-FINAL-COMPLETE/frontend/node_modules/.cache/default-development/5.pack
-VPS-FINAL-COMPLETE/frontend/node_modules/.cache/default-development/0.pack
-VPS-FINAL-COMPLETE/frontend/node_modules/.cache/default-development/2.pack
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
-frontend/node_modules/.cache/default-development/1.pack
-frontend/node_modules/.cache/default-development/3.pack
+# ==========================================
+# SCREENSHOTS & TESTS
+# ==========================================
+/tmp/
+*.png
+*.jpg
+*.jpeg
+!public/*.png
+!public/*.jpg
+!frontend/public/*.png
+!frontend/public/*.jpg
+!frontend/public/hero-bg.png
+
+# ==========================================
+# MISC
+# ==========================================
+*.pid
+*.seed
+.lock-wscript
 frontend/node_modules/.cache/default-development/4.pack
--e 
-# Environment files
-*.env
-*.env.*
--e 
-# Environment files
-*.env
-*.env.*
+frontend/node_modules/.cache/default-development/7.pack

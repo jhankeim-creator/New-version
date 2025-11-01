@@ -618,14 +618,6 @@ async def update_api_settings(settings: dict):
             os.environ["STRIPE_PUBLISHABLE_KEY"] = settings["stripe_publishable_key"]
         if settings.get("plisio_api_key"):
             os.environ["PLISIO_API_KEY"] = settings["plisio_api_key"]
-        if settings.get("smtp_user"):
-            os.environ["SMTP_USER"] = settings["smtp_user"]
-        if settings.get("smtp_password"):
-            os.environ["SMTP_PASSWORD"] = settings["smtp_password"]
-        if settings.get("smtp_host"):
-            os.environ["SMTP_HOST"] = settings["smtp_host"]
-        if settings.get("smtp_port"):
-            os.environ["SMTP_PORT"] = str(settings["smtp_port"])
         if settings.get("from_email"):
             os.environ["FROM_EMAIL"] = settings["from_email"]
         if settings.get("from_name"):

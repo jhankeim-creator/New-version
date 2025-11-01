@@ -582,20 +582,26 @@ async def get_api_settings():
     """Get current API settings (keys are masked)"""
     settings = await db.api_settings.find_one({"_id": "global"})
     
+    # Define allowed fields (NO SMTP fields)
+    allowed_fields = {
+        "resend_api_key": "",
+        "stripe_secret_key": "",
+        "stripe_publishable_key": "",
+        "plisio_api_key": "",
+        "from_email": "",
+        "from_name": "Kayee01"
+    }
+    
     if not settings:
         # Return default empty settings
-        return {
-            "resend_api_key": "",
-            "stripe_secret_key": "",
-            "stripe_publishable_key": "",
-            "plisio_api_key": "",
-            "from_email": "",
-            "from_name": "Kayee01"
-        }
+        return allowed_fields
     
-    # Mask sensitive keys for display
-    settings.pop("_id", None)
-    return settings
+    # Filter out any SMTP fields and return only allowed fields
+    filtered_settings = {}
+    for field in allowed_fields:
+        filtered_settings[field] = settings.get(field, allowed_fields[field])
+    
+    return filtered_settings
 
 
 @admin_router.post("/api-settings")

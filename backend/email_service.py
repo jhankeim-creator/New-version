@@ -786,7 +786,7 @@ class EmailService:
                     
                     <h3 style="color: #1a1a1a; margin-top: 30px;">🚚 Shipping Address</h3>
                     <div style="background: white; padding: 15px; border-radius: 5px; margin: 10px 0;">
-                        <p style="margin: 5px 0;">{order_data['shipping_address']['address']}</p>
+                        <p style="margin: 5px 0;">{order_data['shipping_address'].get('street', order_data['shipping_address'].get('address', ''))}</p>
                         <p style="margin: 5px 0;">{order_data['shipping_address']['city']}, {order_data['shipping_address']['postal_code']}</p>
                         <p style="margin: 5px 0;"><strong>{order_data['shipping_address']['country']}</strong></p>
                     </div>

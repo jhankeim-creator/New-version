@@ -209,3 +209,4 @@ KAYEE01-REAL-CREDENTIALS.env
 add_*.py
 import_*.py
 frontend/node_modules/.cache/default-development/1.pack
+frontend/node_modules/.cache/default-development/6.pack

@@ -175,7 +175,7 @@ class EmailService:
                     {payment_instructions}
                     <h3>Adresse de livraison :</h3>
                     <p>
-                        {order_data['shipping_address']['address']}<br>
+                        {order_data['shipping_address'].get('street', order_data['shipping_address'].get('address', ''))}<br>
                         {order_data['shipping_address']['city']}, {order_data['shipping_address']['postal_code']}<br>
                         {order_data['shipping_address']['country']}
                     </p>

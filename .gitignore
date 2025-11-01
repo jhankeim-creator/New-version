@@ -184,3 +184,7 @@ test_result.md
 .lock-wscript
 frontend/node_modules/.cache/default-development/4.pack
 frontend/node_modules/.cache/default-development/7.pack
+-e 
+# Environment files
+*.env
+*.env.*

@@ -454,19 +454,19 @@ class EmailService:
                 </div>
                 
                 <div style="padding: 30px 20px;">
-                    <h2 style="color: #d4af37;">{status_messages.get(order_data['status'], 'Mise à jour de commande')}</h2>
+                    <h2 style="color: #d4af37;">{status_messages.get(order_data.get('order_status', order_data.get('status', 'pending')), 'Mise à jour de commande')}</h2>
                     <p>Bonjour <strong>{order_data['user_name']}</strong>,</p>
                     
                     <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0; text-align: center;">
                         <p style="font-size: 18px; margin: 0;">
-                            {status_descriptions.get(order_data['status'], 'Le statut de votre commande a été mis à jour.')}
+                            {status_descriptions.get(order_data.get('order_status', order_data.get('status', 'pending')), 'Le statut de votre commande a été mis à jour.')}
                         </p>
                     </div>
                     
                     <div style="background: #fff; padding: 15px; border: 1px solid #ddd; border-radius: 5px; margin: 20px 0;">
                         <p><strong>Numéro de commande :</strong> {order_data['order_number']}</p>
                         <p><strong>Ancien statut :</strong> {old_status}</p>
-                        <p><strong>Nouveau statut :</strong> <span style="color: #d4af37; font-weight: bold;">{order_data['status']}</span></p>
+                        <p><strong>Nouveau statut :</strong> <span style="color: #d4af37; font-weight: bold;">{order_data.get('order_status', order_data.get('status', 'pending'))}</span></p>
                         <p><strong>Total :</strong> ${order_data['total']:.2f}</p>
                     </div>
                     

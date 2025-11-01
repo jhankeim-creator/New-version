@@ -192,3 +192,19 @@ frontend/node_modules/.cache/default-development/7.pack
 # Environment files
 *.env
 *.env.*
+
+# ==========================================
+# DEPLOYMENT PACKAGES (OLD/SENSITIVE)
+# ==========================================
+VPS-FINAL-COMPLETE/
+DEPLOY-VPS-FINAL/
+vps-deployment-package/
+hostinger-vps/
+*.tar.gz
+FIVERR-*.txt
+FIVERR-*.md
+KAYEE01-REAL-CREDENTIALS.env
+
+# Old import/test scripts
+add_*.py
+import_*.py

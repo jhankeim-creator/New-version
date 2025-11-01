@@ -1,0 +1,111 @@
+# ==========================================
+# KAYEE01 - DOCKERIGNORE
+# ==========================================
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+DEPLOY.md
+*.md
+docs/
+
+# Environment files (will be provided separately)
+.env
+.env.*
+*.env
+!.env.example
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+ENV/
+env/
+.venv
+*.pyc
+.pytest_cache/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Logs
+logs/
+*.log
+
+# Test files
+*_test.py
+test_*.py
+tests/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+*~
+
+# Temp files
+*.tmp
+*.temp
+.tmp/
+temp/
+
+# Backup files
+*.bak
+*.backup
+*.old
+backup/
+
+# Uploads (will be mounted as volume)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Cache
+.cache/
+frontend/node_modules/.cache/
+
+# Docker files (avoid recursion)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Deployment packages
+VPS-FINAL-COMPLETE/
+hostinger-vps/
+vps-deployment-package/
+DEPLOY-VPS-FINAL/
+
+# Screenshots
+*.png
+*.jpg
+*.jpeg
+!public/*.png
+!frontend/public/*.png
+!frontend/public/hero-bg.png
+
+# Credentials
+*credentials*
+KAYEE01-REAL-CREDENTIALS.env
+
+# Misc
+.emergent/
+test_result.md

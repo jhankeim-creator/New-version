@@ -578,7 +578,7 @@ import uuid
 # ==================== API SETTINGS ====================
 
 @admin_router.get("/api-settings")
-async def get_api_settings():
+async def get_api_settings(admin: User = Depends(get_current_admin)):
     """Get current API settings (keys are masked)"""
     settings = await db.api_settings.find_one({"_id": "global"})
     

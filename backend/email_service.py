@@ -200,7 +200,7 @@ class EmailService:
                     <h3>Adresse de livraison :</h3>
                     <p>
                         {order_data['shipping_address'].get('street', order_data['shipping_address'].get('address', ''))}<br>
-                        {order_data['shipping_address']['city']}, {order_data['shipping_address']['postal_code']}<br>
+                        {order_data['shipping_address']['city']}, {order_data['shipping_address'].get('postal_code', order_data['shipping_address'].get('zip', ''))}<br>
                         {order_data['shipping_address']['country']}
                     </p>
                     

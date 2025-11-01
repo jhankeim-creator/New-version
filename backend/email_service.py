@@ -345,7 +345,7 @@ class EmailService:
         shipping_addr = order_data.get('shipping_address', {})
         address_html = f"""
         {shipping_addr.get('street', shipping_addr.get('address', ''))}<br>
-        {shipping_addr.get('city', '')}, {shipping_addr.get('postal_code', '')}<br>
+        {shipping_addr.get('city', '')}, {shipping_addr.get('postal_code', shipping_addr.get('zip', ''))}<br>
         {shipping_addr.get('country', '')}
         """
         

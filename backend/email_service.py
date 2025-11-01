@@ -762,7 +762,7 @@ class EmailService:
                     <div style="background: white; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #4caf50;">
                         <p style="margin: 5px 0;"><strong>Order Number:</strong> <span style="color: #d4af37; font-size: 18px;">{order_data['order_number']}</span></p>
                         <p style="margin: 5px 0;"><strong>Date:</strong> {datetime.now(timezone.utc).strftime('%d/%m/%Y %H:%M:%S')} UTC</p>
-                        <p style="margin: 5px 0;"><strong>Status:</strong> <span style="background: #ffc107; color: #000; padding: 3px 10px; border-radius: 3px; font-weight: bold;">{order_data['status'].upper()}</span></p>
+                        <p style="margin: 5px 0;"><strong>Status:</strong> <span style="background: #ffc107; color: #000; padding: 3px 10px; border-radius: 3px; font-weight: bold;">{order_data.get('order_status', order_data.get('status', 'pending')).upper()}</span></p>
                         <p style="margin: 5px 0;"><strong>Payment Method:</strong> {payment_display}</p>
                     </div>
                     

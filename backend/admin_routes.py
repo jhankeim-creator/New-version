@@ -614,6 +614,8 @@ async def update_api_settings(settings: dict):
         )
         
         # Update environment variables (runtime only - not permanent)
+        if settings.get("resend_api_key"):
+            os.environ["RESEND_API_KEY"] = settings["resend_api_key"]
         if settings.get("stripe_secret_key"):
             os.environ["STRIPE_SECRET_KEY"] = settings["stripe_secret_key"]
         if settings.get("stripe_publishable_key"):

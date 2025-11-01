@@ -759,13 +759,20 @@ async def create_order(order_data: OrderCreate):
         order_dict_for_email = order.model_dump()
         order_dict_for_email["payment_gateway_instructions"] = payment_gateway_instructions
         order_dict_for_email["payment_gateway_name"] = payment_gateway_name
+        # Ensure 'status' key exists for email templates
+        if 'status' not in order_dict_for_email:
+            order_dict_for_email['status'] = order_dict_for_email.get('order_status', 'pending')
         await email_service.send_order_confirmation(order_dict_for_email)
     except Exception as e:
         logger.error(f"Failed to send order confirmation email: {str(e)}")
     
     # Envoyer notification aux administrateurs
     try:
-        await email_service.send_admin_new_order_notification(order.model_dump())
+        admin_order_dict = order.model_dump()
+        # Ensure 'status' key exists for email templates
+        if 'status' not in admin_order_dict:
+            admin_order_dict['status'] = admin_order_dict.get('order_status', 'pending')
+        await email_service.send_admin_new_order_notification(admin_order_dict)
         logger.info(f"✓ Admin notifications sent for order {order.order_number}")
     except Exception as e:
         logger.error(f"Failed to send admin notification email: {str(e)}")

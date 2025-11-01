@@ -850,7 +850,11 @@ async def update_order_status(
         
         # Si le paiement est confirmé
         if payment_status == "confirmed" and old_payment_status != "confirmed":
-            await email_service.send_payment_confirmation(order_obj.model_dump())
+            order_dict_payment = order_obj.model_dump()
+            # Ensure 'status' key exists for email templates
+            if 'status' not in order_dict_payment:
+                order_dict_payment['status'] = order_dict_payment.get('order_status', 'pending')
+            await email_service.send_payment_confirmation(order_dict_payment)
     except Exception as e:
         logger.error(f"Failed to send notification email: {str(e)}")
     

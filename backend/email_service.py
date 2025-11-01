@@ -156,7 +156,7 @@ class EmailService:
                     <div style="background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0;">
                         <p><strong>Order Number:</strong> {order_data['order_number']}</p>
                         <p><strong>Payment Method:</strong> {order_data['payment_method']}</p>
-                        <p><strong>Status:</strong> {order_data['status']}</p>
+                        <p><strong>Status:</strong> {order_data.get('order_status', order_data.get('status', 'pending'))}</p>
                     </div>
                     
                     <h3>Ordered Items:</h3>

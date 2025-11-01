@@ -209,7 +209,7 @@ class Order(BaseModel):
     shipping_address: dict
     shipping_method: Optional[str] = "free"  # free or fedex
     shipping_cost: Optional[float] = 0.0
-    phone: str
+    phone: Optional[str] = ""
     notes: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     

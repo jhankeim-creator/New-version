@@ -623,7 +623,7 @@ class EmailService:
                     <div style="background: #f9f9f9; padding: 20px; border-radius: 5px; margin: 20px 0;">
                         <h3 style="margin-top: 0; color: #1a1a1a;">What's Next?</h3>
                         <ul style="padding-left: 20px;">
-                            <li>Browse our exclusive collection of luxury replicas</li>
+                            <li>Browse our exclusive collection of luxury-inspired designs</li>
                             <li>Enjoy secure checkout with multiple payment options</li>
                             <li>Get 15% OFF when paying with cryptocurrency</li>
                             <li>Track your orders in real-time</li>

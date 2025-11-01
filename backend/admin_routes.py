@@ -585,6 +585,7 @@ async def get_api_settings():
     if not settings:
         # Return default empty settings
         return {
+            "resend_api_key": "",
             "stripe_secret_key": "",
             "stripe_publishable_key": "",
             "plisio_api_key": "",

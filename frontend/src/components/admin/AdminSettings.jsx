@@ -64,6 +64,7 @@ const AdminSettings = () => {
 
   // API Keys State
   const [apiKeys, setApiKeys] = useState({
+    resend_api_key: '',
     stripe_secret_key: '',
     stripe_publishable_key: '',
     plisio_api_key: '',

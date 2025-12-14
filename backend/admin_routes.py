@@ -6,6 +6,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+from pathlib import Path
 from models import (
     ProductExtended, ProductExtendedCreate, ProductExtendedUpdate,
     ProductVariation, ProductVariationCreate,
@@ -18,16 +19,24 @@ from models import (
 
 # Import authentication dependencies from server.py
 import sys
-sys.path.append('/app/backend')
+# Ensure this directory is importable regardless of container layout
+THIS_DIR = Path(__file__).resolve().parent
+if str(THIS_DIR) not in sys.path:
+    sys.path.append(str(THIS_DIR))
 from server import User, get_current_admin
 
 # Create router
-admin_router = APIRouter(prefix="/admin", tags=["admin"])
+admin_router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    # Protect ALL admin endpoints by default
+    dependencies=[Depends(get_current_admin)],
+)
 
 # MongoDB connection
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[os.environ.get('DB_NAME', 'kayee01_db')]
 
 
 # ==================== DASHBOARD STATISTICS ====================

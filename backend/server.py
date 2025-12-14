@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional
+import re
 import uuid
 from datetime import datetime, timezone, timedelta
 from passlib.context import CryptContext
@@ -263,24 +264,27 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    # For admin login, use simple password check temporarily
-    if plain_password == "Admin123!" and "kayicom509@gmail.com" in str(hashed_password):
-        return True
-    
+    """
+    Verify password using passlib, with a bcrypt fallback.
+
+    NOTE: Do not add hardcoded bypasses here; it becomes a credential backdoor.
+    """
+    if not hashed_password:
+        return False
+
     try:
-        result = pwd_context.verify(plain_password, hashed_password)
-        print(f"Passlib verification result: {result}")
-        return result
-    except Exception as e:
-        print(f"Passlib error: {e}")
-        # Fallback to bcrypt directly
-        import bcrypt
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        # Fallback to bcrypt directly (helps if hashes were generated outside passlib)
         try:
-            result = bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
-            print(f"Bcrypt verification result: {result}")
-            return result
-        except Exception as e2:
-            print(f"Bcrypt error: {e2}")
+            import bcrypt
+            hashed_bytes = (
+                hashed_password.encode("utf-8")
+                if isinstance(hashed_password, str)
+                else hashed_password
+            )
+            return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_bytes)
+        except Exception:
             return False
 
 def create_access_token(data: dict) -> str:
@@ -360,22 +364,14 @@ async def register(user_data: UserCreate):
 
 @api_router.post("/auth/login", response_model=Token)
 async def login(credentials: UserLogin):
-    print(f"Login attempt for email: {credentials.email}")
     user_doc = await db.users.find_one({"email": credentials.email}, {"_id": 0})
     
     if not user_doc:
-        print("User not found")
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    print(f"User found: {user_doc.get('email')}")
-    
-    # Temporary bypass for admin login during testing
-    if credentials.email == "kayicom509@gmail.com" and credentials.password == "Admin123!":
-        password_valid = True
-        print("Admin bypass activated")
-    else:
-        password_valid = verify_password(credentials.password, user_doc.get('password_hash', ''))
-        print(f"Password valid: {password_valid}")
+
+    # Support legacy admin records that stored "password" instead of "password_hash"
+    stored_hash = user_doc.get("password_hash") or user_doc.get("password") or ""
+    password_valid = verify_password(credentials.password, stored_hash)
     
     if not password_valid:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -577,14 +573,23 @@ async def search_products(q: str, limit: int = 10):
     """Search products by name, description, or tags"""
     if not q or len(q.strip()) < 2:
         return []
+    q = q.strip()
+
+    # Prevent pathological regex inputs (regex injection / ReDoS)
+    if len(q) > 64:
+        raise HTTPException(status_code=400, detail="Search query too long")
+
+    # Cap limit to prevent unbounded queries
+    limit = max(1, min(limit, 50))
+    safe_pattern = re.escape(q)
     
     # Create text search query
     search_query = {
         "$or": [
-            {"name": {"$regex": q, "$options": "i"}},
-            {"description": {"$regex": q, "$options": "i"}},
-            {"tags": {"$regex": q, "$options": "i"}},
-            {"category": {"$regex": q, "$options": "i"}}
+            {"name": {"$regex": safe_pattern, "$options": "i"}},
+            {"description": {"$regex": safe_pattern, "$options": "i"}},
+            {"tags": {"$regex": safe_pattern, "$options": "i"}},
+            {"category": {"$regex": safe_pattern, "$options": "i"}}
         ]
     }
     
@@ -1460,13 +1465,14 @@ async def create_team_member(member: AdminUserCreate, current_user: User = Depen
     )
     
     user_dict = admin_user.model_dump()
-    user_dict["password"] = hashed_password
+    # Store consistently with the rest of the auth system
+    user_dict["password_hash"] = hashed_password
     user_dict = prepare_for_mongo(user_dict)
     
     await db.users.insert_one(user_dict)
     
     # Return without password and with proper serialization
-    user_dict.pop("password", None)
+    user_dict.pop("password_hash", None)
     user_dict.pop("_id", None)  # Remove MongoDB _id if present
     return parse_from_mongo(user_dict)
 
@@ -1498,7 +1504,7 @@ async def update_team_member(
     if update_data.permissions is not None:
         update_dict["permissions"] = update_data.permissions.model_dump()
     if update_data.password is not None:
-        update_dict["password"] = pwd_context.hash(update_data.password)
+        update_dict["password_hash"] = pwd_context.hash(update_data.password)
     
     if not update_dict:
         raise HTTPException(status_code=400, detail="No valid fields to update")
@@ -1558,8 +1564,21 @@ app.include_router(complete_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    # If allow_credentials=True, allow_origins cannot be "*".
+    # Default to a safe single-origin policy for local dev unless explicitly configured.
+    allow_origins=(
+        ["*"]
+        if "*" in [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+        else (
+            [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+            or [os.environ.get("FRONTEND_URL", "http://localhost:3000")]
+        )
+    ),
+    allow_credentials=(
+        False
+        if "*" in [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+        else True
+    ),
     allow_methods=["*"],
     allow_headers=["*"],
 )

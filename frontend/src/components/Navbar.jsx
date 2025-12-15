@@ -15,11 +15,12 @@ import {
 } from './ui/dropdown-menu';
 
 const Navbar = () => {
-  const { cartCount, user, logout } = useContext(CartContext);
+  const { cartCount, user, logout, API } = useContext(CartContext);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   const { lang, setLang, t } = useI18n();
+  const [branding, setBranding] = useState({ store_name: 'Kayee01', logo_url: '' });
 
   useEffect(() => {
     const handleScroll = () => {
@@ -28,6 +29,21 @@ const Navbar = () => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    const loadBranding = async () => {
+      try {
+        const res = await fetch(`${API}/settings/branding`);
+        if (res.ok) {
+          const data = await res.json();
+          setBranding(data);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    loadBranding();
+  }, [API]);
 
   return (
     <nav
@@ -39,10 +55,18 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2">
-            <div className="text-2xl font-bold" style={{ fontFamily: 'Playfair Display' }}>
-              <span className="text-[#d4af37]">Kayee</span>
-              <span className="text-[#1a1a1a]">01</span>
-            </div>
+            {branding.logo_url ? (
+              <img
+                src={branding.logo_url}
+                alt={branding.store_name || 'Store'}
+                className="h-10 w-auto object-contain"
+              />
+            ) : (
+              <div className="text-2xl font-bold" style={{ fontFamily: 'Playfair Display' }}>
+                <span className="text-[#d4af37]">Kayee</span>
+                <span className="text-[#1a1a1a]">01</span>
+              </div>
+            )}
           </Link>
 
           {/* Search Bar (Desktop) */}

@@ -13,22 +13,22 @@ class PayPalService:
     """
     
     def __init__(self):
-        self.client_id = os.environ.get('PAYPAL_CLIENT_ID', 'your_paypal_client_id')
-        self.client_secret = os.environ.get('PAYPAL_CLIENT_SECRET', 'your_paypal_client_secret')
-        self.mode = os.environ.get('PAYPAL_MODE', 'sandbox')  # sandbox ou live
-        
-        if self.mode == 'sandbox':
-            self.base_url = "https://api-m.sandbox.paypal.com"
-        else:
-            self.base_url = "https://api-m.paypal.com"
-        
-        self.is_demo = self.client_id == 'your_paypal_client_id'
+        # Config is read dynamically per request (supports runtime updates from admin settings)
         self.access_token = None
+
+    def _get_config(self):
+        client_id = os.environ.get('PAYPAL_CLIENT_ID', 'your_paypal_client_id')
+        client_secret = os.environ.get('PAYPAL_CLIENT_SECRET', 'your_paypal_client_secret')
+        mode = os.environ.get('PAYPAL_MODE', 'sandbox')  # sandbox | live
+        base_url = "https://api-m.sandbox.paypal.com" if mode == "sandbox" else "https://api-m.paypal.com"
+        is_demo = client_id == 'your_paypal_client_id' or not client_id or client_id.strip() == ""
+        return client_id, client_secret, mode, base_url, is_demo
     
     def _get_access_token(self) -> str:
         """Obtenir un token d'accès OAuth2"""
         try:
-            auth = base64.b64encode(f"{self.client_id}:{self.client_secret}".encode()).decode()
+            client_id, client_secret, _, base_url, _ = self._get_config()
+            auth = base64.b64encode(f"{client_id}:{client_secret}".encode()).decode()
             
             headers = {
                 "Authorization": f"Basic {auth}",
@@ -36,7 +36,7 @@ class PayPalService:
             }
             
             response = requests.post(
-                f"{self.base_url}/v1/oauth2/token",
+                f"{base_url}/v1/oauth2/token",
                 headers=headers,
                 data={"grant_type": "client_credentials"},
                 timeout=30
@@ -65,7 +65,8 @@ class PayPalService:
         Documentation: https://developer.paypal.com/docs/api/orders/v2/#orders_create
         """
         
-        if self.is_demo:
+        _, _, _, base_url, is_demo = self._get_config()
+        if is_demo:
             logger.info(f"💰 PayPal Demo Mode - Order Creation:")
             logger.info(f"Order: {order_id}, Amount: ${amount}")
             
@@ -111,7 +112,7 @@ class PayPalService:
             }
             
             response = requests.post(
-                f"{self.base_url}/v2/checkout/orders",
+                f"{base_url}/v2/checkout/orders",
                 json=payload,
                 headers=headers,
                 timeout=30
@@ -152,7 +153,8 @@ class PayPalService:
         Documentation: https://developer.paypal.com/docs/api/orders/v2/#orders_capture
         """
         
-        if self.is_demo:
+        _, _, _, base_url, is_demo = self._get_config()
+        if is_demo:
             return {
                 "success": True,
                 "demo_mode": True,
@@ -170,7 +172,7 @@ class PayPalService:
             }
             
             response = requests.post(
-                f"{self.base_url}/v2/checkout/orders/{paypal_order_id}/capture",
+                f"{base_url}/v2/checkout/orders/{paypal_order_id}/capture",
                 headers=headers,
                 timeout=30
             )

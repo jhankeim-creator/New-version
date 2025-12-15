@@ -263,12 +263,24 @@ class WalletRefundRequest(BaseModel):
     amount: Optional[float] = None
     reason: Optional[str] = None
 
+class BrandingUpdate(BaseModel):
+    store_name: Optional[str] = None
+    logo_url: Optional[str] = None
+
 # API Settings model
 class APISettings(BaseModel):
     resend_api_key: Optional[str] = ""
     stripe_secret_key: Optional[str] = ""
     stripe_publishable_key: Optional[str] = ""
     plisio_api_key: Optional[str] = ""
+    paypal_client_id: Optional[str] = ""
+    paypal_client_secret: Optional[str] = ""
+    paypal_mode: Optional[str] = "sandbox"
+    coinpal_api_key: Optional[str] = ""
+    coinpal_api_secret: Optional[str] = ""
+    coinpal_webhook_secret: Optional[str] = ""
+    binance_pay_api_key: Optional[str] = ""
+    binance_pay_api_secret: Optional[str] = ""
     from_email: Optional[str] = ""
     from_name: Optional[str] = "Kayee01"
 
@@ -1258,6 +1270,39 @@ async def get_wallet_transactions(current_user: User = Depends(get_current_user)
     for tx in txs:
         parse_from_mongo(tx)
     return [WalletTransaction(**tx) for tx in txs]
+
+# ===== BRANDING / LOGO ROUTES =====
+
+@api_router.get("/settings/branding")
+async def get_public_branding():
+    """Public store branding (safe fields only)"""
+    settings = await db.admin_settings.find_one({"id": "admin_settings"}, {"_id": 0})
+    branding = (settings or {}).get("branding", {}) if settings else {}
+    return {
+        "store_name": branding.get("store_name", os.environ.get("STORE_NAME", "Kayee01")),
+        "logo_url": branding.get("logo_url", "")
+    }
+
+@api_router.get("/admin/settings/branding")
+async def get_admin_branding(admin: User = Depends(get_current_admin)):
+    settings = await db.admin_settings.find_one({"id": "admin_settings"}, {"_id": 0})
+    branding = (settings or {}).get("branding", {}) if settings else {}
+    return {
+        "store_name": branding.get("store_name", os.environ.get("STORE_NAME", "Kayee01")),
+        "logo_url": branding.get("logo_url", "")
+    }
+
+@api_router.put("/admin/settings/branding")
+async def update_admin_branding(branding: BrandingUpdate, admin: User = Depends(get_current_admin)):
+    update = {k: v for k, v in branding.model_dump().items() if v is not None}
+    if not update:
+        raise HTTPException(status_code=400, detail="No branding fields provided")
+    await db.admin_settings.update_one(
+        {"id": "admin_settings"},
+        {"$set": {"branding": update, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    return {"message": "Branding updated successfully"}
 
 @api_router.post("/admin/orders/{order_id}/refund-to-wallet")
 async def refund_order_to_wallet(

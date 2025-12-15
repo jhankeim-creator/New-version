@@ -63,13 +63,23 @@ const AdminProductAdd = () => {
         formData.append('file', file);
         
         const response = await axios.post(`${API}/v2/upload`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          }
         });
+
+        // Backend may return relative "/uploads/..." URLs. Normalize to absolute.
+        const rawUrl = response.data.url;
+        const normalizedUrl =
+          typeof rawUrl === 'string' && rawUrl.startsWith('/uploads/')
+            ? `${process.env.REACT_APP_BACKEND_URL}${rawUrl}`
+            : rawUrl;
         
         if (response.data.type === 'image') {
-          setImages(prev => [...prev, response.data.url]);
+          setImages(prev => [...prev, normalizedUrl]);
         } else {
-          setVideos(prev => [...prev, response.data.url]);
+          setVideos(prev => [...prev, normalizedUrl]);
         }
         
         toast.success(`${file.name} uploaded!`);
@@ -80,7 +90,7 @@ const AdminProductAdd = () => {
     }
     
     setUploadingImages(false);
-  }, [API]);
+  }, [API, token]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: onDropImages,

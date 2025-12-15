@@ -602,6 +602,14 @@ async def get_api_settings(admin: User = Depends(get_current_admin)):
         "stripe_secret_key": "",
         "stripe_publishable_key": "",
         "plisio_api_key": "",
+        "paypal_client_id": "",
+        "paypal_client_secret": "",
+        "paypal_mode": "sandbox",
+        "coinpal_api_key": "",
+        "coinpal_api_secret": "",
+        "coinpal_webhook_secret": "",
+        "binance_pay_api_key": "",
+        "binance_pay_api_secret": "",
         "from_email": "",
         "from_name": "Kayee01"
     }
@@ -625,7 +633,11 @@ async def update_api_settings(settings: dict, admin: User = Depends(get_current_
         # Define allowed fields (NO SMTP fields)
         allowed_fields = {
             "resend_api_key", "stripe_secret_key", "stripe_publishable_key", 
-            "plisio_api_key", "from_email", "from_name"
+            "plisio_api_key",
+            "paypal_client_id", "paypal_client_secret", "paypal_mode",
+            "coinpal_api_key", "coinpal_api_secret", "coinpal_webhook_secret",
+            "binance_pay_api_key", "binance_pay_api_secret",
+            "from_email", "from_name"
         }
         
         # Filter incoming settings to only allowed fields
@@ -647,6 +659,22 @@ async def update_api_settings(settings: dict, admin: User = Depends(get_current_
             os.environ["STRIPE_PUBLISHABLE_KEY"] = filtered_settings["stripe_publishable_key"]
         if filtered_settings.get("plisio_api_key"):
             os.environ["PLISIO_API_KEY"] = filtered_settings["plisio_api_key"]
+        if filtered_settings.get("paypal_client_id"):
+            os.environ["PAYPAL_CLIENT_ID"] = filtered_settings["paypal_client_id"]
+        if filtered_settings.get("paypal_client_secret"):
+            os.environ["PAYPAL_CLIENT_SECRET"] = filtered_settings["paypal_client_secret"]
+        if filtered_settings.get("paypal_mode"):
+            os.environ["PAYPAL_MODE"] = filtered_settings["paypal_mode"]
+        if filtered_settings.get("coinpal_api_key"):
+            os.environ["COINPAL_API_KEY"] = filtered_settings["coinpal_api_key"]
+        if filtered_settings.get("coinpal_api_secret"):
+            os.environ["COINPAL_API_SECRET"] = filtered_settings["coinpal_api_secret"]
+        if filtered_settings.get("coinpal_webhook_secret"):
+            os.environ["COINPAL_WEBHOOK_SECRET"] = filtered_settings["coinpal_webhook_secret"]
+        if filtered_settings.get("binance_pay_api_key"):
+            os.environ["BINANCE_PAY_API_KEY"] = filtered_settings["binance_pay_api_key"]
+        if filtered_settings.get("binance_pay_api_secret"):
+            os.environ["BINANCE_PAY_API_SECRET"] = filtered_settings["binance_pay_api_secret"]
         if filtered_settings.get("from_email"):
             os.environ["FROM_EMAIL"] = filtered_settings["from_email"]
         if filtered_settings.get("from_name"):

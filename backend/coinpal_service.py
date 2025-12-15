@@ -15,16 +15,20 @@ class CoinPalService:
     """
     
     def __init__(self):
-        self.api_key = os.environ.get('COINPAL_API_KEY', 'your_coinpal_api_key')
-        self.api_secret = os.environ.get('COINPAL_API_SECRET', 'your_coinpal_api_secret')
-        self.webhook_secret = os.environ.get('COINPAL_WEBHOOK_SECRET', 'your_webhook_secret')
         self.base_url = "https://api.coinpal.io/v1"
-        self.is_demo = self.api_key == 'your_coinpal_api_key'
+
+    def _get_keys(self):
+        api_key = os.environ.get('COINPAL_API_KEY', 'your_coinpal_api_key')
+        api_secret = os.environ.get('COINPAL_API_SECRET', 'your_coinpal_api_secret')
+        webhook_secret = os.environ.get('COINPAL_WEBHOOK_SECRET', 'your_webhook_secret')
+        is_demo = api_key == 'your_coinpal_api_key' or not api_key or api_key.strip() == ""
+        return api_key, api_secret, webhook_secret, is_demo
     
     def _generate_signature(self, payload: str) -> str:
         """Generate HMAC signature for API requests"""
+        _, api_secret, _, _ = self._get_keys()
         return hmac.new(
-            self.api_secret.encode('utf-8'),
+            api_secret.encode('utf-8'),
             payload.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()
@@ -51,8 +55,10 @@ class CoinPalService:
             Dict contenant l'URL de paiement et les détails
         """
         
+        api_key, _, _, is_demo = self._get_keys()
+
         # Mode démo - retourner des données simulées
-        if self.is_demo:
+        if is_demo:
             logger.info(f"📝 CoinPal Demo Mode - Payment Request:")
             logger.info(f"Order ID: {order_id}")
             logger.info(f"Amount: ${amount} {currency}")
@@ -93,7 +99,7 @@ class CoinPalService:
             signature = self._generate_signature(payload_string)
             
             headers = {
-                "X-API-KEY": self.api_key,
+                "X-API-KEY": api_key,
                 "X-SIGNATURE": signature,
                 "Content-Type": "application/json"
             }
@@ -144,7 +150,8 @@ class CoinPalService:
             Dict contenant le statut du paiement
         """
         
-        if self.is_demo:
+        api_key, _, _, is_demo = self._get_keys()
+        if is_demo:
             return {
                 "success": True,
                 "demo_mode": True,
@@ -160,7 +167,7 @@ class CoinPalService:
             signature = self._generate_signature(params)
             
             headers = {
-                "X-API-KEY": self.api_key,
+                "X-API-KEY": api_key,
                 "X-SIGNATURE": signature
             }
             

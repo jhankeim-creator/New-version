@@ -16,16 +16,20 @@ class BinancePayService:
     """
     
     def __init__(self):
-        self.api_key = os.environ.get('BINANCE_PAY_API_KEY', 'your_binance_pay_api_key')
-        self.api_secret = os.environ.get('BINANCE_PAY_API_SECRET', 'your_binance_pay_api_secret')
         self.base_url = "https://bpay.binanceapi.com"
-        self.is_demo = self.api_key == 'your_binance_pay_api_key'
+
+    def _get_keys(self):
+        api_key = os.environ.get('BINANCE_PAY_API_KEY', 'your_binance_pay_api_key')
+        api_secret = os.environ.get('BINANCE_PAY_API_SECRET', 'your_binance_pay_api_secret')
+        is_demo = api_key == 'your_binance_pay_api_key' or not api_key or api_key.strip() == ""
+        return api_key, api_secret, is_demo
     
     def _generate_signature(self, timestamp: str, nonce: str, body: str) -> str:
         """Générer la signature HMAC SHA512"""
+        _, api_secret, _ = self._get_keys()
         payload = f"{timestamp}\n{nonce}\n{body}\n"
         signature = hmac.new(
-            self.api_secret.encode('utf-8'),
+            api_secret.encode('utf-8'),
             payload.encode('utf-8'),
             hashlib.sha512
         ).hexdigest().upper()
@@ -45,7 +49,8 @@ class BinancePayService:
         Documentation: https://developers.binance.com/docs/binance-pay/api-order-create-v2
         """
         
-        if self.is_demo:
+        api_key, _, is_demo = self._get_keys()
+        if is_demo:
             logger.info(f"🟡 Binance Pay Demo Mode - Order Creation:")
             logger.info(f"Order: {merchant_order_no}, Amount: {total_amount} {currency}")
             
@@ -93,7 +98,7 @@ class BinancePayService:
                 "Content-Type": "application/json",
                 "BinancePay-Timestamp": timestamp,
                 "BinancePay-Nonce": nonce,
-                "BinancePay-Certificate-SN": self.api_key,
+                "BinancePay-Certificate-SN": api_key,
                 "BinancePay-Signature": signature
             }
             
@@ -141,7 +146,8 @@ class BinancePayService:
         Documentation: https://developers.binance.com/docs/binance-pay/api-order-query
         """
         
-        if self.is_demo:
+        api_key, _, is_demo = self._get_keys()
+        if is_demo:
             return {
                 "success": True,
                 "demo_mode": True,
@@ -164,7 +170,7 @@ class BinancePayService:
                 "Content-Type": "application/json",
                 "BinancePay-Timestamp": timestamp,
                 "BinancePay-Nonce": nonce,
-                "BinancePay-Certificate-SN": self.api_key,
+                "BinancePay-Certificate-SN": api_key,
                 "BinancePay-Signature": signature
             }
             

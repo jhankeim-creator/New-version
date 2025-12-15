@@ -18,10 +18,14 @@ class PlisioService:
     """
     
     def __init__(self):
-        self.api_key = os.environ.get('PLISIO_API_KEY', 'your_plisio_api_key')
         self.base_url = "https://plisio.net/api/v1"
-        self.is_demo = self.api_key == 'your_plisio_api_key'
-        logger.info(f"Plisio initialized - Demo mode: {self.is_demo}, Key: {self.api_key[:20]}...")
+        logger.info("Plisio initialized")
+
+    def _get_api_key(self) -> str:
+        return os.environ.get('PLISIO_API_KEY', 'your_plisio_api_key')
+
+    def _is_demo(self, api_key: str) -> bool:
+        return api_key == 'your_plisio_api_key' or not api_key or api_key.strip() == ""
     
     async def create_invoice(
         self,
@@ -52,8 +56,10 @@ class PlisioService:
             Dict contenant l'URL de paiement et les détails
         """
         
+        api_key = self._get_api_key()
+
         # Mode démo
-        if self.is_demo:
+        if self._is_demo(api_key):
             logger.info(f"📝 Plisio Demo Mode - Invoice Creation:")
             logger.info(f"Order: {order_number}")
             logger.info(f"Amount: {amount} {source_currency}")
@@ -90,7 +96,7 @@ class PlisioService:
                 "callback_url": callback_url,
                 "success_callback_url": f"{frontend_url}/order-success/{order_number}?payment=success",
                 "fail_callback_url": f"{frontend_url}/checkout?payment=failed",
-                "api_key": self.api_key
+                "api_key": api_key
             }
             
             response = requests.get(
@@ -151,7 +157,8 @@ class PlisioService:
             Dict contenant le statut
         """
         
-        if self.is_demo:
+        api_key = self._get_api_key()
+        if self._is_demo(api_key):
             return {
                 "success": True,
                 "demo_mode": True,
@@ -162,7 +169,7 @@ class PlisioService:
         
         try:
             params = {
-                "api_key": self.api_key,
+                "api_key": api_key,
                 "id": invoice_id
             }
             

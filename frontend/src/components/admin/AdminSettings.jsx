@@ -8,7 +8,7 @@ import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { CartContext } from '../../App';
-import { Plus, Trash2, Save, Settings, Link as LinkIcon, Bell, Mail, CreditCard, Eye, EyeOff, Key } from 'lucide-react';
+import { Plus, Trash2, Save, Settings, Link as LinkIcon, Bell, Mail, CreditCard, Eye, EyeOff, Key, Image as ImageIcon, Upload } from 'lucide-react';
 
 const AdminSettings = () => {
   const { API, token } = useContext(CartContext);
@@ -73,6 +73,9 @@ const AdminSettings = () => {
   });
   const [showKeys, setShowKeys] = useState({});
 
+  // Branding / Logo State
+  const [branding, setBranding] = useState({ store_name: 'Kayee01', logo_url: '' });
+
   useEffect(() => {
     loadData();
   }, [activeTab]);
@@ -99,6 +102,9 @@ const AdminSettings = () => {
       } else if (activeTab === 'api-keys') {
         const res = await axios.get(`${API}/admin/api-settings`, { headers });
         setApiKeys(res.data);
+      } else if (activeTab === 'branding') {
+        const res = await axios.get(`${API}/admin/settings/branding`, { headers });
+        setBranding(res.data);
       }
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -310,12 +316,53 @@ const AdminSettings = () => {
     setShowKeys(prev => ({ ...prev, [keyName]: !prev[keyName] }));
   };
 
+  const uploadLogo = async (file) => {
+    try {
+      setLoading(true);
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await axios.post(`${API}/v2/upload`, fd, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const rawUrl = res.data.url;
+      const normalizedUrl =
+        typeof rawUrl === 'string' && rawUrl.startsWith('/uploads/')
+          ? `${process.env.REACT_APP_BACKEND_URL}${rawUrl}`
+          : rawUrl;
+      setBranding(prev => ({ ...prev, logo_url: normalizedUrl }));
+      toast.success('Logo uploaded');
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to upload logo');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveBranding = async () => {
+    try {
+      setLoading(true);
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.put(`${API}/admin/settings/branding`, branding, { headers });
+      toast.success('Branding updated');
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to save branding');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const tabs = [
     { id: 'payment', label: 'Payment Gateways', icon: CreditCard },
     { id: 'social', label: 'Social Links', icon: LinkIcon },
     { id: 'external', label: 'External Links', icon: LinkIcon },
     { id: 'announcement', label: 'Floating Announcement', icon: Bell },
     { id: 'bulk-email', label: 'Bulk Email', icon: Mail },
+    { id: 'branding', label: 'Branding', icon: ImageIcon },
     { id: 'api-keys', label: 'API Keys', icon: Settings },
   ];
 
@@ -756,6 +803,74 @@ const AdminSettings = () => {
         </div>
       )}
 
+      {/* Branding Tab */}
+      {activeTab === 'branding' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <ImageIcon className="h-5 w-5 mr-2" />
+              Store Branding (Logo)
+            </CardTitle>
+            <p className="text-sm text-gray-500 mt-2">
+              Upload your store logo and set the store name (shown in the navbar).
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label>Store Name</Label>
+              <Input
+                value={branding.store_name || ''}
+                onChange={(e) => setBranding(prev => ({ ...prev, store_name: e.target.value }))}
+                placeholder="Kayee01"
+              />
+            </div>
+
+            <div>
+              <Label>Logo</Label>
+              <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
+                <Input
+                  value={branding.logo_url || ''}
+                  onChange={(e) => setBranding(prev => ({ ...prev, logo_url: e.target.value }))}
+                  placeholder="https://... or upload below"
+                />
+                <label className="inline-flex items-center gap-2 px-4 py-2 border rounded cursor-pointer hover:bg-gray-50">
+                  <Upload className="h-4 w-4" />
+                  Upload Logo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) uploadLogo(f);
+                    }}
+                  />
+                </label>
+              </div>
+              {branding.logo_url && (
+                <div className="mt-3 p-3 border rounded bg-gray-50">
+                  <p className="text-xs text-gray-600 mb-2">Preview</p>
+                  <img
+                    src={branding.logo_url}
+                    alt="Store logo"
+                    className="h-12 object-contain bg-white p-2 rounded"
+                  />
+                </div>
+              )}
+            </div>
+
+            <Button
+              onClick={saveBranding}
+              className="bg-[#d4af37] hover:bg-[#b8941f]"
+              disabled={loading}
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {loading ? 'Saving...' : 'Save Branding'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* API Keys Tab */}
       {activeTab === 'api-keys' && (
         <div className="space-y-6">
@@ -878,6 +993,145 @@ const AdminSettings = () => {
                     >
                       {showKeys.plisio_api_key ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
+                  </div>
+                </div>
+              </div>
+
+              {/* PayPal Settings */}
+              <div className="border-b pb-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <CreditCard className="h-5 w-5 mr-2 text-blue-600" />
+                  PayPal
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <Label>PayPal Client ID</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type={showKeys.paypal_client_id ? 'text' : 'password'}
+                        value={apiKeys.paypal_client_id || ''}
+                        onChange={(e) => setApiKeys({ ...apiKeys, paypal_client_id: e.target.value })}
+                        className="flex-1"
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={() => toggleShowKey('paypal_client_id')}>
+                        {showKeys.paypal_client_id ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label>PayPal Client Secret</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type={showKeys.paypal_client_secret ? 'text' : 'password'}
+                        value={apiKeys.paypal_client_secret || ''}
+                        onChange={(e) => setApiKeys({ ...apiKeys, paypal_client_secret: e.target.value })}
+                        className="flex-1"
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={() => toggleShowKey('paypal_client_secret')}>
+                        {showKeys.paypal_client_secret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label>PayPal Mode</Label>
+                    <select
+                      className="w-full p-2 border rounded"
+                      value={apiKeys.paypal_mode || 'sandbox'}
+                      onChange={(e) => setApiKeys({ ...apiKeys, paypal_mode: e.target.value })}
+                    >
+                      <option value="sandbox">sandbox</option>
+                      <option value="live">live</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* CoinPal Settings */}
+              <div className="border-b pb-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <CreditCard className="h-5 w-5 mr-2 text-purple-600" />
+                  CoinPal
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <Label>CoinPal API Key</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type={showKeys.coinpal_api_key ? 'text' : 'password'}
+                        value={apiKeys.coinpal_api_key || ''}
+                        onChange={(e) => setApiKeys({ ...apiKeys, coinpal_api_key: e.target.value })}
+                        className="flex-1"
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={() => toggleShowKey('coinpal_api_key')}>
+                        {showKeys.coinpal_api_key ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label>CoinPal API Secret</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type={showKeys.coinpal_api_secret ? 'text' : 'password'}
+                        value={apiKeys.coinpal_api_secret || ''}
+                        onChange={(e) => setApiKeys({ ...apiKeys, coinpal_api_secret: e.target.value })}
+                        className="flex-1"
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={() => toggleShowKey('coinpal_api_secret')}>
+                        {showKeys.coinpal_api_secret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label>CoinPal Webhook Secret</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type={showKeys.coinpal_webhook_secret ? 'text' : 'password'}
+                        value={apiKeys.coinpal_webhook_secret || ''}
+                        onChange={(e) => setApiKeys({ ...apiKeys, coinpal_webhook_secret: e.target.value })}
+                        className="flex-1"
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={() => toggleShowKey('coinpal_webhook_secret')}>
+                        {showKeys.coinpal_webhook_secret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Binance Pay Settings */}
+              <div className="border-b pb-6">
+                <h3 className="text-lg font-semibold mb-4 flex items-center">
+                  <CreditCard className="h-5 w-5 mr-2 text-yellow-600" />
+                  Binance Pay
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <Label>Binance Pay API Key</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type={showKeys.binance_pay_api_key ? 'text' : 'password'}
+                        value={apiKeys.binance_pay_api_key || ''}
+                        onChange={(e) => setApiKeys({ ...apiKeys, binance_pay_api_key: e.target.value })}
+                        className="flex-1"
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={() => toggleShowKey('binance_pay_api_key')}>
+                        {showKeys.binance_pay_api_key ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Binance Pay API Secret</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type={showKeys.binance_pay_api_secret ? 'text' : 'password'}
+                        value={apiKeys.binance_pay_api_secret || ''}
+                        onChange={(e) => setApiKeys({ ...apiKeys, binance_pay_api_secret: e.target.value })}
+                        className="flex-1"
+                      />
+                      <Button type="button" variant="outline" size="sm" onClick={() => toggleShowKey('binance_pay_api_secret')}>
+                        {showKeys.binance_pay_api_secret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>

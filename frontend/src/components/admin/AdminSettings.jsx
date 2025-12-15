@@ -68,6 +68,14 @@ const AdminSettings = () => {
     stripe_secret_key: '',
     stripe_publishable_key: '',
     plisio_api_key: '',
+    paypal_client_id: '',
+    paypal_client_secret: '',
+    paypal_mode: 'sandbox',
+    coinpal_api_key: '',
+    coinpal_api_secret: '',
+    coinpal_webhook_secret: '',
+    binance_pay_api_key: '',
+    binance_pay_api_secret: '',
     from_email: '',
     from_name: 'Kayee01'
   });

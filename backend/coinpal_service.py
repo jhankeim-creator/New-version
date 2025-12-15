@@ -211,7 +211,14 @@ class CoinPalService:
         Returns:
             True si la signature est valide
         """
-        expected_signature = self._generate_signature(payload)
+        # Webhook signatures should use the webhook secret (not the API secret).
+        _, api_secret, webhook_secret, _ = self._get_keys()
+        secret = webhook_secret if webhook_secret and webhook_secret != "your_webhook_secret" else api_secret
+        expected_signature = hmac.new(
+            secret.encode("utf-8"),
+            payload.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
         return hmac.compare_digest(expected_signature, signature)
 
 # Initialize CoinPal service

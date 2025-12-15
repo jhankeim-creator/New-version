@@ -28,6 +28,7 @@ import RefundPolicy from './pages/RefundPolicy';
 import WhatsAppButton from './components/WhatsAppButton';
 import FloatingAnnouncement from './components/FloatingAnnouncement';
 import GoogleAnalytics from './components/GoogleAnalytics';
+import { I18nProvider } from './i18n';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -170,53 +171,55 @@ function App() {
   };
 
   return (
-    <CartContext.Provider value={{
-      cart,
-      addToCart,
-      updateCartQuantity,
-      removeFromCart,
-      clearCart,
-      cartTotal,
-      cartCount,
-      user,
-      token,
-      login,
-      logout,
-      API,
-      addToWishlist,
-      isInWishlist
-    }}>
-      <div className="App">
-        <BrowserRouter>
-          <Navbar />
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/shop" element={<ShopPage />} />
-            <Route path="/shop/:category" element={<ShopPage />} />
-            <Route path="/product/:id" element={<ProductPage />} />
-            <Route path="/cart" element={<CartPage />} />
-            <Route path="/checkout" element={<CheckoutPage />} />
-            <Route path="/order-success/:orderId" element={<OrderSuccessPage />} />
-            <Route path="/track-order" element={<TrackOrderPage />} />
-            <Route path="/my-orders" element={<MyOrders />} />
-            <Route path="/wishlist" element={<Wishlist />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/account" element={<AccountPage />} />
-            <Route path="/faq" element={<FAQPage />} />
-            <Route path="/terms" element={<TermsOfService />} />
-            <Route path="/refund-policy" element={<RefundPolicy />} />
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/admin/*" element={<AdminDashboard />} />
-          </Routes>
-          <WhatsAppButton />
-          <FloatingAnnouncement />
-          <GoogleAnalytics />
-        </BrowserRouter>
-        <Toaster position="top-right" richColors />
-      </div>
-    </CartContext.Provider>
+    <I18nProvider>
+      <CartContext.Provider value={{
+        cart,
+        addToCart,
+        updateCartQuantity,
+        removeFromCart,
+        clearCart,
+        cartTotal,
+        cartCount,
+        user,
+        token,
+        login,
+        logout,
+        API,
+        addToWishlist,
+        isInWishlist
+      }}>
+        <div className="App">
+          <BrowserRouter>
+            <Navbar />
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/shop" element={<ShopPage />} />
+              <Route path="/shop/:category" element={<ShopPage />} />
+              <Route path="/product/:id" element={<ProductPage />} />
+              <Route path="/cart" element={<CartPage />} />
+              <Route path="/checkout" element={<CheckoutPage />} />
+              <Route path="/order-success/:orderId" element={<OrderSuccessPage />} />
+              <Route path="/track-order" element={<TrackOrderPage />} />
+              <Route path="/my-orders" element={<MyOrders />} />
+              <Route path="/wishlist" element={<Wishlist />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/account" element={<AccountPage />} />
+              <Route path="/faq" element={<FAQPage />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/refund-policy" element={<RefundPolicy />} />
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/admin/*" element={<AdminDashboard />} />
+            </Routes>
+            <WhatsAppButton />
+            <FloatingAnnouncement />
+            <GoogleAnalytics />
+          </BrowserRouter>
+          <Toaster position="top-right" richColors />
+        </div>
+      </CartContext.Provider>
+    </I18nProvider>
   );
 }
 

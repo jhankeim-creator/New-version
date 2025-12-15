@@ -21,7 +21,7 @@ import {
 } from 'recharts';
 
 const AdminDashboard = () => {
-  const { API } = useContext(CartContext);
+  const { API, token } = useContext(CartContext);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -31,7 +31,8 @@ const AdminDashboard = () => {
 
   const loadDashboardStats = async () => {
     try {
-      const response = await axios.get(`${API}/admin/dashboard/stats`);
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const response = await axios.get(`${API}/admin/dashboard/stats`, { headers });
       setStats(response.data);
     } catch (error) {
       console.error('Failed to load dashboard stats:', error);

@@ -10,7 +10,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 
 const AdminCoupons = () => {
-  const { API } = useContext(CartContext);
+  const { API, token } = useContext(CartContext);
   const [coupons, setCoupons] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -30,7 +30,8 @@ const AdminCoupons = () => {
 
   const loadCoupons = async () => {
     try {
-      const response = await axios.get(`${API}/admin/coupons`);
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const response = await axios.get(`${API}/admin/coupons`, { headers });
       setCoupons(response.data);
     } catch (error) {
       console.error('Failed to load coupons:', error);
@@ -52,7 +53,8 @@ const AdminCoupons = () => {
         valid_until: formData.valid_until ? new Date(formData.valid_until).toISOString() : null
       };
 
-      await axios.post(`${API}/admin/coupons`, payload);
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      await axios.post(`${API}/admin/coupons`, payload, { headers });
       toast.success('Coupon created successfully!');
       setShowForm(false);
       setFormData({
@@ -75,7 +77,8 @@ const AdminCoupons = () => {
     if (!window.confirm('Are you sure you want to delete this coupon?')) return;
 
     try {
-      await axios.delete(`${API}/admin/coupons/${couponId}`);
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      await axios.delete(`${API}/admin/coupons/${couponId}`, { headers });
       toast.success('Coupon deleted successfully!');
       loadCoupons();
     } catch (error) {

@@ -278,6 +278,9 @@ class OrderCreate(BaseModel):
     items: List[dict]
     total: float
     payment_method: str
+    coupon_code: Optional[str] = None
+    discount_amount: Optional[float] = 0.0
+    crypto_discount: Optional[float] = 0.0
     shipping_address: dict
     shipping_method: Optional[str] = "free"
     shipping_cost: Optional[float] = 0.0
@@ -575,6 +578,9 @@ async def get_products(
     is_new: Optional[bool] = None,
     best_seller: Optional[bool] = None,
     tags: Optional[str] = None,  # Comma-separated tags
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    sort: Optional[str] = None,  # featured, price_asc, price_desc, newest
     sort_by: Optional[str] = "created_at",  # price, name, created_at, sales_count
     sort_order: Optional[str] = "desc",  # asc or desc
     skip: int = 0,
@@ -594,6 +600,26 @@ async def get_products(
     if tags:
         tag_list = [t.strip() for t in tags.split(",")]
         query["tags"] = {"$in": tag_list}
+
+    if min_price is not None or max_price is not None:
+        query["price"] = {}
+        if min_price is not None:
+            query["price"]["$gte"] = float(min_price)
+        if max_price is not None:
+            query["price"]["$lte"] = float(max_price)
+        if not query["price"]:
+            query.pop("price", None)
+
+    # Allow simple sort param used by the frontend
+    if sort:
+        if sort == "price_asc":
+            sort_by, sort_order = "price", "asc"
+        elif sort == "price_desc":
+            sort_by, sort_order = "price", "desc"
+        elif sort == "newest":
+            sort_by, sort_order = "created_at", "desc"
+        elif sort == "featured":
+            sort_by, sort_order = "featured", "desc"
     
     sort_direction = -1 if sort_order == "desc" else 1
     
@@ -603,12 +629,38 @@ async def get_products(
     return [Product(**prod) for prod in products]
 
 @api_router.get("/products/count")
-async def get_products_count(category: Optional[str] = None, featured: Optional[bool] = None):
+async def get_products_count(
+    category: Optional[str] = None,
+    featured: Optional[bool] = None,
+    on_sale: Optional[bool] = None,
+    is_new: Optional[bool] = None,
+    best_seller: Optional[bool] = None,
+    tags: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+):
     query = {}
     if category:
         query["category"] = category
     if featured is not None:
         query["featured"] = featured
+    if on_sale is not None:
+        query["on_sale"] = on_sale
+    if is_new is not None:
+        query["is_new"] = is_new
+    if best_seller is not None:
+        query["best_seller"] = best_seller
+    if tags:
+        tag_list = [t.strip() for t in tags.split(",")]
+        query["tags"] = {"$in": tag_list}
+    if min_price is not None or max_price is not None:
+        query["price"] = {}
+        if min_price is not None:
+            query["price"]["$gte"] = float(min_price)
+        if max_price is not None:
+            query["price"]["$lte"] = float(max_price)
+        if not query["price"]:
+            query.pop("price", None)
     
     count = await db.products.count_documents(query)
     return {"count": count}
@@ -716,14 +768,12 @@ async def create_order(
     current_user: Optional[User] = Depends(get_current_user_optional),
 ):
     order_number = f"ORD-{str(uuid.uuid4())[:8].upper()}"
-    
-    # Calculate crypto discount (15% for Plisio payments)
-    crypto_discount = 0.0
-    total_amount = order_data.total
-    
-    if order_data.payment_method == 'plisio':
-        crypto_discount = total_amount * 0.15
-        total_amount = total_amount - crypto_discount
+
+    # Discount values are calculated client-side (UI) and persisted here.
+    # Avoid re-applying discounts server-side (prevents double-discount bugs).
+    total_amount = float(order_data.total)
+    crypto_discount = float(order_data.crypto_discount or 0.0) if order_data.payment_method == "plisio" else 0.0
+    discount_amount = float(order_data.discount_amount or 0.0)
     
     # Get payment gateway instructions if it's a custom manual payment
     payment_gateway_instructions = ""
@@ -748,6 +798,8 @@ async def create_order(
     order_dict.update({
         "order_number": order_number,
         "crypto_discount": crypto_discount,
+        "discount_amount": discount_amount,
+        "coupon_code": order_data.coupon_code,
         "total": total_amount,
         # Keep legacy `status` in sync with `order_status`
         "status": "pending",

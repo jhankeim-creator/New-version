@@ -4,6 +4,7 @@ import { ShoppingCart, User, Menu, X, Search, LogOut, Heart } from 'lucide-react
 import { CartContext } from '../App';
 import { Button } from './ui/button';
 import SearchBar from './SearchBar';
+import { useI18n } from '../i18n';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,6 +19,7 @@ const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
+  const { lang, setLang, t } = useI18n();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -51,24 +53,38 @@ const Navbar = () => {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
             <Link to="/" className="text-gray-700 hover:text-[#d4af37] font-medium">
-              Home
+              {t('nav.home')}
             </Link>
             <Link to="/shop" className="text-gray-700 hover:text-[#d4af37] font-medium">
-              Shop All
+              {t('nav.shopAll')}
             </Link>
             <Link to="/shop/fashion" className="text-gray-700 hover:text-[#d4af37] font-medium">
-              Fashion
+              {t('nav.fashion')}
             </Link>
             <Link to="/shop/jewelry" className="text-gray-700 hover:text-[#d4af37] font-medium">
-              Jewelry
+              {t('nav.jewelry')}
+            </Link>
+            <Link to="/shop?tags=topup" className="text-gray-700 hover:text-[#d4af37] font-medium">
+              {t('nav.topup')}
             </Link>
             <Link to="/track-order" className="text-gray-700 hover:text-[#d4af37] font-medium">
-              Track Order
+              {t('nav.trackOrder')}
             </Link>
           </div>
 
           {/* Right Side Actions */}
           <div className="flex items-center space-x-4">
+            {/* Language toggle */}
+            <div className="hidden md:flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLang(lang === 'en' ? 'fr' : 'en')}
+                title={t('common.language')}
+              >
+                {lang.toUpperCase()}
+              </Button>
+            </div>
             {/* User Menu */}
             {user ? (
               <DropdownMenu>
@@ -81,20 +97,20 @@ const Navbar = () => {
                   <DropdownMenuLabel>{user.name}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate('/account')}>
-                    My Account
+                    {t('nav.myAccount')}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate('/my-orders')}>
-                    My Orders
+                    {t('nav.myOrders')}
                   </DropdownMenuItem>
                   {user.role === 'admin' && (
                     <DropdownMenuItem onClick={() => navigate('/admin')}>
-                      Admin Dashboard
+                      {t('nav.adminDashboard')}
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout}>
                     <LogOut className="h-4 w-4 mr-2" />
-                    Logout
+                    {t('nav.logout')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -104,7 +120,7 @@ const Navbar = () => {
                 size="icon"
                 onClick={() => navigate('/login')}
                 data-testid="login-button"
-                title="Login / Register"
+                title={t('nav.loginTitle')}
               >
                 <User className="h-5 w-5" />
               </Button>
@@ -154,50 +170,65 @@ const Navbar = () => {
               className="block py-2 text-gray-700 hover:text-[#d4af37]"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Home
+              {t('nav.home')}
             </Link>
             <Link
               to="/shop"
               className="block py-2 text-gray-700 hover:text-[#d4af37]"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Shop All
+              {t('nav.shopAll')}
             </Link>
             <Link
               to="/shop/fashion"
               className="block py-2 text-gray-700 hover:text-[#d4af37]"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Fashion
+              {t('nav.fashion')}
             </Link>
             <Link
               to="/shop/jewelry"
               className="block py-2 text-gray-700 hover:text-[#d4af37]"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Jewelry
+              {t('nav.jewelry')}
+            </Link>
+            <Link
+              to="/shop?tags=topup"
+              className="block py-2 text-gray-700 hover:text-[#d4af37]"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              {t('nav.topup')}
             </Link>
             <Link
               to="/track-order"
               className="block py-2 text-gray-700 hover:text-[#d4af37]"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Track Order
+              {t('nav.trackOrder')}
             </Link>
             <Link
               to="/wishlist"
               className="block py-2 text-gray-700 hover:text-[#d4af37]"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              My Wishlist
+              {t('nav.wishlist')}
             </Link>
             <Link
               to="/my-orders"
               className="block py-2 text-gray-700 hover:text-[#d4af37]"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              My Orders
+              {t('nav.myOrders')}
             </Link>
+
+            {/* Mobile language toggle */}
+            <button
+              className="block py-2 text-left w-full text-gray-700 hover:text-[#d4af37]"
+              onClick={() => setLang(lang === 'en' ? 'fr' : 'en')}
+            >
+              {t('common.language')}: {lang.toUpperCase()}
+            </button>
           </div>
         )}
       </div>

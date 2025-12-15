@@ -90,6 +90,9 @@ const CheckoutPage = () => {
           image: item.images[0]
         })),
         total: finalTotal,
+        coupon_code: couponApplied ? couponCode : null,
+        discount_amount: couponDiscount,
+        crypto_discount: cryptoDiscount,
         shipping_method: shippingMethod,
         shipping_cost: shippingCost,
         payment_method: formData.paymentMethod,

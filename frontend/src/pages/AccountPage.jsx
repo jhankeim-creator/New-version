@@ -74,10 +74,11 @@ const AccountPage = () => {
       const response = await axios.get(`${API}/wishlist`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setWishlist(response.data.items || []);
+      // Backend returns a plain list of products
+      setWishlist(Array.isArray(response.data) ? response.data : (response.data.items || []));
       setStats(prev => ({
         ...prev,
-        wishlistCount: response.data.items?.length || 0
+        wishlistCount: Array.isArray(response.data) ? response.data.length : (response.data.items?.length || 0)
       }));
     } catch (error) {
       console.error('Failed to load wishlist:', error);

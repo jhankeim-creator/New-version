@@ -14,6 +14,7 @@ const AdminOrders = () => {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showDialog, setShowDialog] = useState(false);
   const [showTrackingDialog, setShowTrackingDialog] = useState(false);
+  const [refundLoading, setRefundLoading] = useState(false);
   const [trackingData, setTrackingData] = useState({
     tracking_number: '',
     tracking_carrier: 'fedex'
@@ -50,6 +51,26 @@ const AdminOrders = () => {
     } catch (error) {
       console.error('Failed to update order:', error);
       toast.error('Failed to update order');
+    }
+  };
+
+  const refundToWallet = async (order) => {
+    if (!window.confirm(`Refund ${order.order_number} to customer wallet?`)) return;
+    setRefundLoading(true);
+    try {
+      await axios.post(
+        `${API}/admin/orders/${order.id}/refund-to-wallet`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success('Refund credited to customer wallet');
+      setShowDialog(false);
+      loadOrders();
+    } catch (error) {
+      console.error('Failed to refund to wallet:', error);
+      toast.error(error.response?.data?.detail || 'Failed to refund to wallet');
+    } finally {
+      setRefundLoading(false);
     }
   };
 
@@ -144,7 +165,7 @@ const AdminOrders = () => {
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Order Status</p>
                   <Select
-                    value={order.status}
+                    value={order.status || order.order_status || 'pending'}
                     onValueChange={(value) => updateOrderStatus(order.id, value)}
                   >
                     <SelectTrigger className="w-full">
@@ -156,6 +177,7 @@ const AdminOrders = () => {
                       <SelectItem value="shipped">Shipped</SelectItem>
                       <SelectItem value="delivered">Delivered</SelectItem>
                       <SelectItem value="cancelled">Cancelled</SelectItem>
+                      <SelectItem value="refunded">Refunded</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -172,6 +194,7 @@ const AdminOrders = () => {
                       <SelectItem value="pending">Pending</SelectItem>
                       <SelectItem value="confirmed">Confirmed</SelectItem>
                       <SelectItem value="failed">Failed</SelectItem>
+                      <SelectItem value="refunded">Refunded</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -222,6 +245,11 @@ const AdminOrders = () => {
           </DialogHeader>
           {selectedOrder && (
             <div className="space-y-4">
+              {selectedOrder.refunded_to_wallet && (
+                <div className="p-3 rounded border bg-green-50 border-green-200 text-green-900">
+                  Refunded to wallet: ${Number(selectedOrder.refunded_amount || 0).toFixed(2)}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-600">Customer</p>
@@ -272,6 +300,19 @@ const AdminOrders = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div className="pt-4 border-t flex justify-end gap-2">
+                {!selectedOrder.refunded_to_wallet && (
+                  <Button
+                    onClick={() => refundToWallet(selectedOrder)}
+                    variant="outline"
+                    disabled={refundLoading}
+                    className="text-green-700 border-green-300 hover:bg-green-50"
+                  >
+                    {refundLoading ? 'Refunding...' : 'Refund to Wallet'}
+                  </Button>
+                )}
               </div>
             </div>
           )}

@@ -10,7 +10,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 
 const AdminCustomers = () => {
-  const { API } = useContext(CartContext);
+  const { API, token } = useContext(CartContext);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -28,7 +28,8 @@ const AdminCustomers = () => {
         params.group = filterGroup;
       }
 
-      const response = await axios.get(`${API}/admin/customers`, { params });
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      const response = await axios.get(`${API}/admin/customers`, { params, headers });
       setCustomers(response.data);
     } catch (error) {
       console.error('Failed to load customers:', error);
@@ -42,7 +43,8 @@ const AdminCustomers = () => {
     if (!window.confirm('Delete this customer and all their data?')) return;
     
     try {
-      await axios.delete(`${API}/admin/customers/${customerId}`);
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      await axios.delete(`${API}/admin/customers/${customerId}`, { headers });
       toast.success('Customer deleted successfully');
       loadCustomers();
     } catch (error) {

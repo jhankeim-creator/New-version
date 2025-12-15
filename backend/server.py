@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional
+import re
 import uuid
 from datetime import datetime, timezone, timedelta
 from passlib.context import CryptContext
@@ -42,6 +43,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
+security_optional = HTTPBearer(auto_error=False)
 
 # Create the main app
 app = FastAPI()
@@ -58,6 +60,7 @@ class User(BaseModel):
     email: EmailStr
     name: str
     role: str = "customer"  # customer or admin
+    wallet_balance: float = 0.0  # store credit for future purchases
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class UserCreate(BaseModel):
@@ -204,8 +207,10 @@ class Order(BaseModel):
     items: List[dict]
     total: float
     order_status: str = "pending"  # pending, processing, shipped, delivered, cancelled
+    # Frontend/admin dashboard expects `status` (legacy), so we store both.
+    status: str = "pending"
     payment_method: str  # stripe, binance, plisio, manual
-    payment_status: str = "pending"  # pending, confirmed, failed
+    payment_status: str = "pending"  # pending, confirmed, failed, refunded
     shipping_address: dict
     shipping_method: Optional[str] = "free"  # free or fedex
     shipping_cost: Optional[float] = 0.0
@@ -236,6 +241,28 @@ class Order(BaseModel):
     binance_checkout_url: Optional[str] = None
     binance_qr_code: Optional[str] = None
 
+    # Refund / store-credit fields
+    refunded_to_wallet: bool = False
+    refunded_amount: float = 0.0
+    refunded_at: Optional[str] = None
+    refund_reason: Optional[str] = None
+    wallet_transaction_id: Optional[str] = None
+
+class WalletTransaction(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    user_email: EmailStr
+    type: str  # credit | debit
+    amount: float
+    reason: str
+    order_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class WalletRefundRequest(BaseModel):
+    amount: Optional[float] = None
+    reason: Optional[str] = None
+
 # API Settings model
 class APISettings(BaseModel):
     resend_api_key: Optional[str] = ""
@@ -251,6 +278,9 @@ class OrderCreate(BaseModel):
     items: List[dict]
     total: float
     payment_method: str
+    coupon_code: Optional[str] = None
+    discount_amount: Optional[float] = 0.0
+    crypto_discount: Optional[float] = 0.0
     shipping_address: dict
     shipping_method: Optional[str] = "free"
     shipping_cost: Optional[float] = 0.0
@@ -263,24 +293,27 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    # For admin login, use simple password check temporarily
-    if plain_password == "Admin123!" and "kayicom509@gmail.com" in str(hashed_password):
-        return True
-    
+    """
+    Verify password using passlib, with a bcrypt fallback.
+
+    NOTE: Do not add hardcoded bypasses here; it becomes a credential backdoor.
+    """
+    if not hashed_password:
+        return False
+
     try:
-        result = pwd_context.verify(plain_password, hashed_password)
-        print(f"Passlib verification result: {result}")
-        return result
-    except Exception as e:
-        print(f"Passlib error: {e}")
-        # Fallback to bcrypt directly
-        import bcrypt
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        # Fallback to bcrypt directly (helps if hashes were generated outside passlib)
         try:
-            result = bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
-            print(f"Bcrypt verification result: {result}")
-            return result
-        except Exception as e2:
-            print(f"Bcrypt error: {e2}")
+            import bcrypt
+            hashed_bytes = (
+                hashed_password.encode("utf-8")
+                if isinstance(hashed_password, str)
+                else hashed_password
+            )
+            return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_bytes)
+        except Exception:
             return False
 
 def create_access_token(data: dict) -> str:
@@ -305,6 +338,24 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail="Token has expired")
     except (InvalidSignatureError, DecodeError, Exception) as e:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+async def get_current_user_optional(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional),
+) -> Optional[User]:
+    if credentials is None:
+        return None
+    try:
+        token = credentials.credentials
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if not user_id:
+            return None
+        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        if not user:
+            return None
+        return User(**user)
+    except Exception:
+        return None
 
 async def get_current_admin(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
@@ -360,22 +411,14 @@ async def register(user_data: UserCreate):
 
 @api_router.post("/auth/login", response_model=Token)
 async def login(credentials: UserLogin):
-    print(f"Login attempt for email: {credentials.email}")
     user_doc = await db.users.find_one({"email": credentials.email}, {"_id": 0})
     
     if not user_doc:
-        print("User not found")
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    print(f"User found: {user_doc.get('email')}")
-    
-    # Temporary bypass for admin login during testing
-    if credentials.email == "kayicom509@gmail.com" and credentials.password == "Admin123!":
-        password_valid = True
-        print("Admin bypass activated")
-    else:
-        password_valid = verify_password(credentials.password, user_doc.get('password_hash', ''))
-        print(f"Password valid: {password_valid}")
+
+    # Support legacy admin records that stored "password" instead of "password_hash"
+    stored_hash = user_doc.get("password_hash") or user_doc.get("password") or ""
+    password_valid = verify_password(credentials.password, stored_hash)
     
     if not password_valid:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -403,6 +446,7 @@ async def update_profile(
     profile_data.pop('email', None)  # Email shouldn't be changed here
     profile_data.pop('role', None)
     profile_data.pop('created_at', None)
+    profile_data.pop('wallet_balance', None)  # wallet is managed by admin/refunds only
     
     # Update user
     result = await db.users.update_one(
@@ -534,6 +578,9 @@ async def get_products(
     is_new: Optional[bool] = None,
     best_seller: Optional[bool] = None,
     tags: Optional[str] = None,  # Comma-separated tags
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+    sort: Optional[str] = None,  # featured, price_asc, price_desc, newest
     sort_by: Optional[str] = "created_at",  # price, name, created_at, sales_count
     sort_order: Optional[str] = "desc",  # asc or desc
     skip: int = 0,
@@ -553,6 +600,26 @@ async def get_products(
     if tags:
         tag_list = [t.strip() for t in tags.split(",")]
         query["tags"] = {"$in": tag_list}
+
+    if min_price is not None or max_price is not None:
+        query["price"] = {}
+        if min_price is not None:
+            query["price"]["$gte"] = float(min_price)
+        if max_price is not None:
+            query["price"]["$lte"] = float(max_price)
+        if not query["price"]:
+            query.pop("price", None)
+
+    # Allow simple sort param used by the frontend
+    if sort:
+        if sort == "price_asc":
+            sort_by, sort_order = "price", "asc"
+        elif sort == "price_desc":
+            sort_by, sort_order = "price", "desc"
+        elif sort == "newest":
+            sort_by, sort_order = "created_at", "desc"
+        elif sort == "featured":
+            sort_by, sort_order = "featured", "desc"
     
     sort_direction = -1 if sort_order == "desc" else 1
     
@@ -562,12 +629,38 @@ async def get_products(
     return [Product(**prod) for prod in products]
 
 @api_router.get("/products/count")
-async def get_products_count(category: Optional[str] = None, featured: Optional[bool] = None):
+async def get_products_count(
+    category: Optional[str] = None,
+    featured: Optional[bool] = None,
+    on_sale: Optional[bool] = None,
+    is_new: Optional[bool] = None,
+    best_seller: Optional[bool] = None,
+    tags: Optional[str] = None,
+    min_price: Optional[float] = None,
+    max_price: Optional[float] = None,
+):
     query = {}
     if category:
         query["category"] = category
     if featured is not None:
         query["featured"] = featured
+    if on_sale is not None:
+        query["on_sale"] = on_sale
+    if is_new is not None:
+        query["is_new"] = is_new
+    if best_seller is not None:
+        query["best_seller"] = best_seller
+    if tags:
+        tag_list = [t.strip() for t in tags.split(",")]
+        query["tags"] = {"$in": tag_list}
+    if min_price is not None or max_price is not None:
+        query["price"] = {}
+        if min_price is not None:
+            query["price"]["$gte"] = float(min_price)
+        if max_price is not None:
+            query["price"]["$lte"] = float(max_price)
+        if not query["price"]:
+            query.pop("price", None)
     
     count = await db.products.count_documents(query)
     return {"count": count}
@@ -577,14 +670,23 @@ async def search_products(q: str, limit: int = 10):
     """Search products by name, description, or tags"""
     if not q or len(q.strip()) < 2:
         return []
+    q = q.strip()
+
+    # Prevent pathological regex inputs (regex injection / ReDoS)
+    if len(q) > 64:
+        raise HTTPException(status_code=400, detail="Search query too long")
+
+    # Cap limit to prevent unbounded queries
+    limit = max(1, min(limit, 50))
+    safe_pattern = re.escape(q)
     
     # Create text search query
     search_query = {
         "$or": [
-            {"name": {"$regex": q, "$options": "i"}},
-            {"description": {"$regex": q, "$options": "i"}},
-            {"tags": {"$regex": q, "$options": "i"}},
-            {"category": {"$regex": q, "$options": "i"}}
+            {"name": {"$regex": safe_pattern, "$options": "i"}},
+            {"description": {"$regex": safe_pattern, "$options": "i"}},
+            {"tags": {"$regex": safe_pattern, "$options": "i"}},
+            {"category": {"$regex": safe_pattern, "$options": "i"}}
         ]
     }
     
@@ -661,16 +763,17 @@ async def delete_product(product_id: str, admin: User = Depends(get_current_admi
 # ===== ORDER ROUTES =====
 
 @api_router.post("/orders", response_model=Order)
-async def create_order(order_data: OrderCreate):
+async def create_order(
+    order_data: OrderCreate,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
     order_number = f"ORD-{str(uuid.uuid4())[:8].upper()}"
-    
-    # Calculate crypto discount (15% for Plisio payments)
-    crypto_discount = 0.0
-    total_amount = order_data.total
-    
-    if order_data.payment_method == 'plisio':
-        crypto_discount = total_amount * 0.15
-        total_amount = total_amount - crypto_discount
+
+    # Discount values are calculated client-side (UI) and persisted here.
+    # Avoid re-applying discounts server-side (prevents double-discount bugs).
+    total_amount = float(order_data.total)
+    crypto_discount = float(order_data.crypto_discount or 0.0) if order_data.payment_method == "plisio" else 0.0
+    discount_amount = float(order_data.discount_amount or 0.0)
     
     # Get payment gateway instructions if it's a custom manual payment
     payment_gateway_instructions = ""
@@ -695,7 +798,11 @@ async def create_order(order_data: OrderCreate):
     order_dict.update({
         "order_number": order_number,
         "crypto_discount": crypto_discount,
+        "discount_amount": discount_amount,
+        "coupon_code": order_data.coupon_code,
         "total": total_amount,
+        # Keep legacy `status` in sync with `order_status`
+        "status": "pending",
         "payment_gateway_instructions": payment_gateway_instructions,
         "payment_gateway_name": payment_gateway_name
     })
@@ -708,6 +815,38 @@ async def create_order(order_data: OrderCreate):
     payment_info = {}
     
     try:
+        # Wallet payment (store credit)
+        if order_data.payment_method == 'wallet':
+            if not current_user:
+                raise HTTPException(status_code=401, detail="Login required to pay with wallet")
+            if current_user.email.lower() != order.user_email.lower():
+                raise HTTPException(status_code=400, detail="Wallet user/email mismatch")
+
+            user_doc = await db.users.find_one({"id": current_user.id}, {"_id": 0})
+            wallet_balance = float((user_doc or {}).get("wallet_balance", 0.0))
+            if wallet_balance < order.total:
+                raise HTTPException(status_code=400, detail="Insufficient wallet balance")
+
+            new_balance = wallet_balance - float(order.total)
+            await db.users.update_one({"id": current_user.id}, {"$set": {"wallet_balance": new_balance}})
+
+            tx = WalletTransaction(
+                user_id=current_user.id,
+                user_email=current_user.email,
+                type="debit",
+                amount=float(order.total),
+                reason=f"Payment for {order.order_number}",
+                order_id=order.id,
+            )
+            await db.wallet_transactions.insert_one(prepare_for_mongo(tx.model_dump()))
+
+            payment_info = {
+                "payment_status": "confirmed",
+                "order_status": "processing",
+                "status": "processing",
+                "wallet_transaction_id": tx.id,
+            }
+
         if order_data.payment_method == 'stripe':
             payment_result = await stripe_service.create_payment_link(
                 order_id=order.id,
@@ -819,7 +958,7 @@ async def update_order_status(
     old_status = old_order.get("order_status")
     old_payment_status = old_order.get("payment_status")
     
-    update_data = {"order_status": status}
+    update_data = {"order_status": status, "status": status}
     if payment_status:
         update_data["payment_status"] = payment_status
     
@@ -890,7 +1029,8 @@ async def update_order_tracking(
         {"$set": {
             "tracking_number": tracking_number,
             "tracking_carrier": tracking_carrier,
-            "order_status": "shipped"
+            "order_status": "shipped",
+            "status": "shipped",
         }}
     )
     
@@ -939,7 +1079,8 @@ async def stripe_webhook(request: Request):
                     {"id": order_id},
                     {"$set": {
                         "payment_status": "confirmed",
-                        "order_status": "processing"
+                        "order_status": "processing",
+                        "status": "processing",
                     }}
                 )
                 
@@ -970,7 +1111,8 @@ async def plisio_webhook(request: Request):
                 {"id": order_number},
                 {"$set": {
                     "payment_status": "confirmed",
-                    "order_status": "processing"
+                    "order_status": "processing",
+                    "status": "processing",
                 }}
             )
             
@@ -1097,6 +1239,78 @@ async def get_products_by_ids(ids: str):
         {"_id": 0}
     ).to_list(length=None)
     return [Product(**parse_from_mongo(p)) for p in products]
+
+# ===== WALLET ROUTES =====
+
+@api_router.get("/wallet/balance")
+async def get_wallet_balance(current_user: User = Depends(get_current_user)):
+    user_doc = await db.users.find_one({"id": current_user.id}, {"_id": 0})
+    balance = float((user_doc or {}).get("wallet_balance", 0.0))
+    return {"balance": balance}
+
+@api_router.get("/wallet/transactions", response_model=List[WalletTransaction])
+async def get_wallet_transactions(current_user: User = Depends(get_current_user), limit: int = 50):
+    limit = max(1, min(limit, 200))
+    txs = await db.wallet_transactions.find(
+        {"user_id": current_user.id},
+        {"_id": 0},
+    ).sort("created_at", -1).limit(limit).to_list(length=limit)
+    for tx in txs:
+        parse_from_mongo(tx)
+    return [WalletTransaction(**tx) for tx in txs]
+
+@api_router.post("/admin/orders/{order_id}/refund-to-wallet")
+async def refund_order_to_wallet(
+    order_id: str,
+    refund: WalletRefundRequest,
+    admin: User = Depends(get_current_admin),
+):
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    if order.get("refunded_to_wallet"):
+        raise HTTPException(status_code=400, detail="Order already refunded to wallet")
+
+    order_total = float(order.get("total", 0.0))
+    amount = float(refund.amount) if refund.amount is not None else order_total
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Refund amount must be > 0")
+    if amount > order_total:
+        raise HTTPException(status_code=400, detail="Refund amount cannot exceed order total")
+
+    user_email = order.get("user_email")
+    user_doc = await db.users.find_one({"email": user_email}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="Customer account not found for this order")
+
+    old_balance = float(user_doc.get("wallet_balance", 0.0))
+    new_balance = old_balance + amount
+    await db.users.update_one({"id": user_doc["id"]}, {"$set": {"wallet_balance": new_balance}})
+
+    tx = WalletTransaction(
+        user_id=user_doc["id"],
+        user_email=user_doc["email"],
+        type="credit",
+        amount=amount,
+        reason=refund.reason or f"Refund for {order.get('order_number')}",
+        order_id=order_id,
+    )
+    await db.wallet_transactions.insert_one(prepare_for_mongo(tx.model_dump()))
+
+    refund_fields = {
+        "refunded_to_wallet": True,
+        "refunded_amount": amount,
+        "refunded_at": datetime.now(timezone.utc).isoformat(),
+        "refund_reason": refund.reason or "Refunded to wallet",
+        "wallet_transaction_id": tx.id,
+        "payment_status": "refunded",
+        "order_status": "refunded",
+        "status": "refunded",
+    }
+    await db.orders.update_one({"id": order_id}, {"$set": refund_fields})
+
+    return {"message": "Refund credited to customer wallet", "wallet_balance": new_balance, "transaction_id": tx.id}
 
 # ===== ADMIN SETTINGS ROUTES =====
 
@@ -1460,13 +1674,14 @@ async def create_team_member(member: AdminUserCreate, current_user: User = Depen
     )
     
     user_dict = admin_user.model_dump()
-    user_dict["password"] = hashed_password
+    # Store consistently with the rest of the auth system
+    user_dict["password_hash"] = hashed_password
     user_dict = prepare_for_mongo(user_dict)
     
     await db.users.insert_one(user_dict)
     
     # Return without password and with proper serialization
-    user_dict.pop("password", None)
+    user_dict.pop("password_hash", None)
     user_dict.pop("_id", None)  # Remove MongoDB _id if present
     return parse_from_mongo(user_dict)
 
@@ -1498,7 +1713,7 @@ async def update_team_member(
     if update_data.permissions is not None:
         update_dict["permissions"] = update_data.permissions.model_dump()
     if update_data.password is not None:
-        update_dict["password"] = pwd_context.hash(update_data.password)
+        update_dict["password_hash"] = pwd_context.hash(update_data.password)
     
     if not update_dict:
         raise HTTPException(status_code=400, detail="No valid fields to update")
@@ -1558,8 +1773,21 @@ app.include_router(complete_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    # If allow_credentials=True, allow_origins cannot be "*".
+    # Default to a safe single-origin policy for local dev unless explicitly configured.
+    allow_origins=(
+        ["*"]
+        if "*" in [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+        else (
+            [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+            or [os.environ.get("FRONTEND_URL", "http://localhost:3000")]
+        )
+    ),
+    allow_credentials=(
+        False
+        if "*" in [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+        else True
+    ),
     allow_methods=["*"],
     allow_headers=["*"],
 )

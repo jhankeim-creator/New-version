@@ -7,7 +7,7 @@ import { X, Plus } from 'lucide-react';
 
 const ProductVariants = ({ formData, setFormData }) => {
   const [newVariantName, setNewVariantName] = useState('');
-  const [newVariantValue, setNewVariantValue] = useState('');
+  const [newVariantValues, setNewVariantValues] = useState({});
 
   const addVariantType = () => {
     if (!newVariantName.trim()) return;
@@ -28,21 +28,34 @@ const ProductVariants = ({ formData, setFormData }) => {
       variants: newVariants,
       has_variants: newVariants.length > 0
     });
+    setNewVariantValues((prev) => {
+      const copy = { ...prev };
+      delete copy[index];
+      return copy;
+    });
   };
 
   const addVariantValue = (variantIndex) => {
-    if (!newVariantValue.trim()) return;
+    const newVariantValue = (newVariantValues[variantIndex] || '').trim();
+    if (!newVariantValue) return;
     
-    const newVariants = [...formData.variants];
-    newVariants[variantIndex].values.push(newVariantValue);
+    const newVariants = formData.variants.map((v, idx) => {
+      if (idx !== variantIndex) return v;
+      const existing = Array.isArray(v.values) ? v.values : [];
+      if (existing.includes(newVariantValue)) return v;
+      return { ...v, values: [...existing, newVariantValue] };
+    });
     
     setFormData({ ...formData, variants: newVariants });
-    setNewVariantValue('');
+    setNewVariantValues((prev) => ({ ...prev, [variantIndex]: '' }));
   };
 
   const removeVariantValue = (variantIndex, valueIndex) => {
-    const newVariants = [...formData.variants];
-    newVariants[variantIndex].values = newVariants[variantIndex].values.filter((_, i) => i !== valueIndex);
+    const newVariants = formData.variants.map((v, idx) => {
+      if (idx !== variantIndex) return v;
+      const existing = Array.isArray(v.values) ? v.values : [];
+      return { ...v, values: existing.filter((_, i) => i !== valueIndex) };
+    });
     
     setFormData({ ...formData, variants: newVariants });
   };
@@ -92,8 +105,8 @@ const ProductVariants = ({ formData, setFormData }) => {
                 <Label className="text-sm">Add {variant.name} Options</Label>
                 <div className="flex gap-2 mt-2">
                   <Input
-                    value={newVariantValue}
-                    onChange={(e) => setNewVariantValue(e.target.value)}
+                    value={newVariantValues[variantIndex] || ''}
+                    onChange={(e) => setNewVariantValues((prev) => ({ ...prev, [variantIndex]: e.target.value }))}
                     placeholder={`e.g., ${variant.name === 'Size' ? 'S, M, L' : variant.name === 'Color' ? 'Black, White' : 'Option 1'}`}
                     onKeyPress={(e) => {
                       if (e.key === 'Enter') {

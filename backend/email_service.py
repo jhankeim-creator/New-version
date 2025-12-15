@@ -28,6 +28,13 @@ class EmailService:
     async def send_email(self, to_email: str, subject: str, html_content: str):
         """Send an email using Resend ONLY"""
         try:
+            # Refresh runtime config (admin settings can update env vars)
+            self.resend_api_key = os.environ.get('RESEND_API_KEY', self.resend_api_key)
+            self.from_email = os.environ.get('FROM_EMAIL', self.from_email)
+            self.from_name = os.environ.get('FROM_NAME', self.from_name)
+            if self.resend_api_key:
+                resend.api_key = self.resend_api_key
+
             if not self.resend_api_key:
                 logger.error("Cannot send email - No Resend API key configured")
                 return False

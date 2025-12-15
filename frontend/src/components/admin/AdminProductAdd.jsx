@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import ProductVariants from '../ProductVariants';
 
 const AdminProductAdd = () => {
-  const { API } = useContext(CartContext);
+  const { API, token } = useContext(CartContext);
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
   const [formData, setFormData] = useState({
@@ -33,7 +33,8 @@ const AdminProductAdd = () => {
     best_seller: false,
     has_variants: false,
     variants: [],
-    variant_options: []
+    variant_options: [],
+    auto_topup: false
   });
   const [images, setImages] = useState([]);
   const [videos, setVideos] = useState([]);
@@ -110,10 +111,15 @@ const AdminProductAdd = () => {
         stock: parseInt(formData.stock) || 0,
         images: images,
         videos: videos,
-        tags: formData.tags.split(',').map(t => t.trim()).filter(t => t)
+        tags: (() => {
+          const baseTags = formData.tags.split(',').map(t => t.trim()).filter(t => t);
+          if (formData.auto_topup && !baseTags.includes('topup')) baseTags.push('topup');
+          return baseTags;
+        })()
       };
 
-      await axios.post(`${API}/v2/products`, productData);
+      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
+      await axios.post(`${API}/v2/products`, productData, { headers });
       
       toast.success('Product created successfully!');
       
@@ -133,14 +139,18 @@ const AdminProductAdd = () => {
         featured: false,
         on_sale: false,
         is_new: false,
-        best_seller: false
+        best_seller: false,
+        has_variants: false,
+        variants: [],
+        variant_options: [],
+        auto_topup: false
       });
       setImages([]);
       setVideos([]);
       
     } catch (error) {
       console.error('Failed to create product:', error);
-      toast.error('Failed to create product');
+      toast.error(error.response?.data?.detail || 'Failed to create product');
     } finally {
       setLoading(false);
     }
@@ -473,6 +483,16 @@ const AdminProductAdd = () => {
                 />
                 <span>Best Seller</span>
               </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.auto_topup}
+                  onChange={(e) => setFormData({ ...formData, auto_topup: e.target.checked })}
+                  className="w-4 h-4"
+                />
+                <span>Auto Topup Product</span>
+              </label>
             </div>
           </CardContent>
         </Card>
@@ -484,7 +504,7 @@ const AdminProductAdd = () => {
           </Button>
           <Button
             type="submit"
-            disabled={loading || images.length === 0}
+            disabled={loading || images.length === 0 || !token}
             className="bg-[#d4af37] hover:bg-[#b8941f]"
           >
             {loading ? 'Creating...' : 'Create Product'}

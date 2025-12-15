@@ -1,5 +1,5 @@
 import { useEffect, useState, useContext } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
@@ -17,6 +17,7 @@ const ShopPage = () => {
   const [totalProducts, setTotalProducts] = useState(0);
   const productsPerPage = 20;
   const navigate = useNavigate();
+  const location = useLocation();
   const [wishlistItems, setWishlistItems] = useState([]);
   
   // Price filter state
@@ -70,6 +71,8 @@ const ShopPage = () => {
     setLoading(true);
     try {
       const skip = (currentPage - 1) * productsPerPage;
+      const searchParams = new URLSearchParams(location.search);
+      const tags = searchParams.get('tags');
       const params = new URLSearchParams({
         skip: skip.toString(),
         limit: productsPerPage.toString()
@@ -77,6 +80,10 @@ const ShopPage = () => {
       
       if (category) {
         params.append('category', category);
+      }
+
+      if (tags) {
+        params.append('tags', tags);
       }
       
       // Add price filter
@@ -94,30 +101,15 @@ const ShopPage = () => {
       
       const [productsRes, countRes] = await Promise.all([
         axios.get(`${API}/products?${params.toString()}`),
-        axios.get(`${API}/products/count${category ? `?category=${category}` : ''}`)
+        axios.get(`${API}/products/count?${params.toString()}`)
       ]);
       
-      // Client-side filtering and sorting as backup
-      let filteredProducts = productsRes.data;
-      
-      // Apply price filter client-side
-      filteredProducts = filteredProducts.filter(p => 
-        p.price >= priceRange.min && p.price <= priceRange.max
-      );
-      
-      // Apply sorting client-side
-      if (sortBy === 'price_asc') {
-        filteredProducts.sort((a, b) => a.price - b.price);
-      } else if (sortBy === 'price_desc') {
-        filteredProducts.sort((a, b) => b.price - a.price);
-      } else if (sortBy === 'newest') {
-        filteredProducts.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      }
-      
-      setProducts(filteredProducts);
-      setTotalProducts(filteredProducts.length);
+      // Prefer server-side filtering/sorting/count
+      setProducts(productsRes.data);
+      setTotalProducts(countRes.data?.count ?? productsRes.data.length);
     } catch (error) {
       console.error('Failed to load products:', error);
+      toast.error('Failed to load products');
     } finally {
       setLoading(false);
     }

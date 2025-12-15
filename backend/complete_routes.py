@@ -1,7 +1,7 @@
 """
 Complete API routes for full e-commerce functionality
 """
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from typing import List, Optional
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
@@ -10,17 +10,24 @@ from datetime import datetime, timezone
 import uuid
 import shutil
 from pathlib import Path
+import sys
+
+# Import admin auth dependency from server.py (works in local + container layouts)
+THIS_DIR = Path(__file__).resolve().parent
+if str(THIS_DIR) not in sys.path:
+    sys.path.append(str(THIS_DIR))
+from server import User, get_current_admin
 
 # Create router
 complete_router = APIRouter(prefix="/api/v2", tags=["complete"])
 
 # MongoDB connection
-mongo_url = os.environ['MONGO_URL']
+mongo_url = os.environ.get('MONGO_URL', 'mongodb://localhost:27017')
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+db = client[os.environ.get('DB_NAME', 'kayee01_db')]
 
 # Upload directory
-UPLOAD_DIR = Path("/app/backend/uploads")
+UPLOAD_DIR = THIS_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 # ==================== HELPER FUNCTIONS ====================
@@ -43,6 +50,40 @@ class ReviewCreate(BaseModel):
     rating: int
     comment: str
     images: List[str] = []
+
+class ProductCreateV2(BaseModel):
+    # Core
+    name: str
+    description: str
+    price: float
+    compare_at_price: Optional[float] = None
+    stock: int = 0
+    sku: Optional[str] = None
+
+    # Categorization (v2 categories)
+    category_id: Optional[str] = None
+    subcategory_id: Optional[str] = None
+
+    # Media
+    images: List[str] = []
+    videos: List[str] = []
+
+    # Merchandising / SEO
+    tags: List[str] = []
+    meta_title: Optional[str] = None
+    meta_description: Optional[str] = None
+    featured: bool = False
+    on_sale: bool = False
+    is_new: bool = False
+    best_seller: bool = False
+
+    # Variants
+    has_variants: bool = False
+    variants: List[dict] = []
+    variant_options: List[dict] = []
+
+    # Optional: auto topup products
+    auto_topup: bool = False
 
 # ==================== MEDIA UPLOAD ====================
 
@@ -209,3 +250,63 @@ async def update_product_rating(product_id: str):
         {"id": product_id},
         {"$set": {"rating": round(avg_rating, 1), "reviews_count": reviews_count}}
     )
+
+# ==================== PRODUCTS (V2) ====================
+
+@complete_router.post("/products")
+async def create_product_v2(product: ProductCreateV2, admin: User = Depends(get_current_admin)):
+    """
+    Create a product using the V2 admin UI payload.
+
+    This stores:
+    - `category` as a readable slug (for existing /api/products filtering)
+    - `category_id` / `subcategory_id` for the V2 category system
+    """
+    category_slug = None
+    if product.category_id:
+        cat = await db.categories.find_one({"id": product.category_id}, {"_id": 0})
+        if cat:
+            category_slug = cat.get("slug") or cat.get("name")
+
+    now = datetime.now(timezone.utc).isoformat()
+    product_doc = {
+        "id": str(uuid.uuid4()),
+        "name": product.name,
+        "description": product.description,
+        "price": float(product.price),
+        "compare_at_price": product.compare_at_price,
+        "images": product.images or [],
+        "videos": product.videos or [],
+        "tags": product.tags or [],
+        "meta_title": product.meta_title,
+        "meta_description": product.meta_description,
+        "featured": bool(product.featured),
+        "on_sale": bool(product.on_sale),
+        "is_new": bool(product.is_new),
+        "best_seller": bool(product.best_seller),
+        "stock": int(product.stock or 0),
+        "sku": product.sku,
+        # Keep existing store filters working
+        "category": category_slug or (product.category_id or "uncategorized"),
+        # V2 category system fields
+        "category_id": product.category_id,
+        "subcategory_id": product.subcategory_id,
+        # Variants
+        "has_variants": bool(product.has_variants),
+        "variants": product.variants or [],
+        "variant_options": product.variant_options or [],
+        # Auto topup
+        "auto_topup": bool(product.auto_topup),
+        # Timestamps
+        "created_at": now,
+        "updated_at": now,
+    }
+
+    await db.products.insert_one(product_doc)
+    return product_doc
+
+@complete_router.get("/products")
+async def list_products_v2(limit: int = 100):
+    """Admin helper endpoint to list products (for V2 UIs)."""
+    limit = max(1, min(limit, 500))
+    return await db.products.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)

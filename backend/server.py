@@ -1799,6 +1799,50 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+# Map admin panel API-settings fields -> environment variables consumed by services.
+API_SETTINGS_ENV_MAP = {
+    "resend_api_key": "RESEND_API_KEY",
+    "stripe_secret_key": "STRIPE_SECRET_KEY",
+    "stripe_publishable_key": "STRIPE_PUBLISHABLE_KEY",
+    "plisio_api_key": "PLISIO_API_KEY",
+    "from_email": "FROM_EMAIL",
+    "from_name": "FROM_NAME",
+}
+
+
+@app.on_event("startup")
+async def load_api_settings_into_env():
+    """Hydrate os.environ with API credentials saved from the admin panel.
+
+    Keys entered in the admin dashboard are stored in the `api_settings`
+    collection. Services read their credentials from environment variables, so
+    without this hook admin-configured keys would be lost on every restart (and
+    would never apply on a fresh deploy that has no .env). Loading them here lets
+    the store be configured entirely from the admin panel and survive restarts.
+    """
+    try:
+        settings = await db.api_settings.find_one({"_id": "global"})
+        if not settings:
+            logger.info("No stored API settings found; using environment defaults")
+            return
+
+        loaded = []
+        for field, env_key in API_SETTINGS_ENV_MAP.items():
+            value = settings.get(field)
+            if value:
+                os.environ[env_key] = value
+                loaded.append(env_key)
+
+        if loaded:
+            logger.info(
+                "Loaded API settings from database into environment: %s",
+                ", ".join(loaded),
+            )
+    except Exception as e:
+        logger.error(f"Failed to load API settings from database: {e}")
+
+
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()

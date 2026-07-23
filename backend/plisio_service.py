@@ -18,10 +18,20 @@ class PlisioService:
     """
     
     def __init__(self):
-        self.api_key = os.environ.get('PLISIO_API_KEY', 'your_plisio_api_key')
         self.base_url = "https://plisio.net/api/v1"
-        self.is_demo = self.api_key == 'your_plisio_api_key'
+        self._refresh_api_key()
         logger.info(f"Plisio initialized - Demo mode: {self.is_demo}, Key: {self.api_key[:20]}...")
+
+    def _refresh_api_key(self):
+        """Read the API key from the environment at request time.
+
+        Admin panel updates (and the startup hydration hook) patch os.environ,
+        so reading here lets key changes take effect without a restart instead
+        of being frozen at import time.
+        """
+        self.api_key = os.environ.get('PLISIO_API_KEY', 'your_plisio_api_key') or 'your_plisio_api_key'
+        self.is_demo = self.api_key == 'your_plisio_api_key'
+        return self.api_key
     
     async def create_invoice(
         self,
@@ -51,7 +61,9 @@ class PlisioService:
         Returns:
             Dict contenant l'URL de paiement et les détails
         """
-        
+        # Refresh runtime config (admin settings can update env vars)
+        self._refresh_api_key()
+
         # Mode démo
         if self.is_demo:
             logger.info(f"📝 Plisio Demo Mode - Invoice Creation:")
@@ -150,7 +162,9 @@ class PlisioService:
         Returns:
             Dict contenant le statut
         """
-        
+        # Refresh runtime config (admin settings can update env vars)
+        self._refresh_api_key()
+
         if self.is_demo:
             return {
                 "success": True,

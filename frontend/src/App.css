@@ -89,3 +89,54 @@ img {
     padding: 40px 0;
   }
 }
+
+/* Refined typography for a more elegant, editorial feel */
+h1, h2, h3 {
+  letter-spacing: -0.01em;
+}
+
+/* WhatsApp floating button pulse */
+@keyframes whatsapp-pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0.55);
+  }
+  70% {
+    box-shadow: 0 0 0 14px rgba(37, 211, 102, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(37, 211, 102, 0);
+  }
+}
+
+.whatsapp-pulse {
+  animation: whatsapp-pulse-ring 2.2s infinite;
+}
+
+/* Elegant product card lift */
+.product-card-elegant {
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.35s ease;
+}
+
+.product-card-elegant:hover {
+  transform: translateY(-6px);
+}
+
+/* Subtle underline animation for text links */
+.link-underline {
+  position: relative;
+}
+
+.link-underline::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: 0;
+  height: 1.5px;
+  background-color: #d4af37;
+  transition: width 0.3s ease;
+}
+
+.link-underline:hover::after {
+  width: 100%;
+}

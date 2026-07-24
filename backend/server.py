@@ -1616,6 +1616,105 @@ async def update_google_analytics(ga_settings: dict, admin: User = Depends(get_c
     return {"message": "Google Analytics settings updated successfully"}
 
 
+# ==================== WHATSAPP SUPPORT ROUTES ====================
+
+DEFAULT_WHATSAPP_SETTINGS = {
+    "enabled": True,
+    "title": "Chat with us on WhatsApp",
+    "buttons": [
+        {
+            "id": "1",
+            "label": "Customer Support",
+            "number": "+12393293813",
+            "message": "Hello Kayee01, I need assistance.",
+            "enabled": True,
+        },
+        {
+            "id": "2",
+            "label": "Sales & Orders",
+            "number": "+12393293813",
+            "message": "Hello Kayee01, I have a question about an order.",
+            "enabled": False,
+        },
+        {
+            "id": "3",
+            "label": "Wholesale Inquiry",
+            "number": "+12393293813",
+            "message": "Hello Kayee01, I'm interested in wholesale.",
+            "enabled": False,
+        },
+    ],
+}
+
+
+def _normalize_whatsapp_settings(wa: dict) -> dict:
+    """Ensure the WhatsApp config always has at most 3 well-formed buttons."""
+    if not isinstance(wa, dict):
+        wa = {}
+    buttons = wa.get("buttons") or []
+    normalized = []
+    for i, button in enumerate(buttons[:3]):
+        if not isinstance(button, dict):
+            continue
+        normalized.append({
+            "id": str(button.get("id") or (i + 1)),
+            "label": (button.get("label") or "").strip() or f"Support {i + 1}",
+            "number": (button.get("number") or "").strip(),
+            "message": (button.get("message") or "").strip(),
+            "enabled": bool(button.get("enabled", True)),
+        })
+    return {
+        "enabled": bool(wa.get("enabled", True)),
+        "title": (wa.get("title") or "Chat with us on WhatsApp").strip(),
+        "buttons": normalized,
+    }
+
+
+@api_router.get("/settings/whatsapp")
+async def get_public_whatsapp_settings():
+    """Get public WhatsApp support buttons (no auth required)."""
+    settings = await db.admin_settings.find_one({"id": "admin_settings"}, {"_id": 0})
+    wa = (settings or {}).get("whatsapp") or DEFAULT_WHATSAPP_SETTINGS
+    if not wa.get("enabled", True):
+        return {"enabled": False, "title": wa.get("title", ""), "buttons": []}
+    buttons = [
+        {
+            "id": str(b.get("id")),
+            "label": b.get("label", "Support"),
+            "number": b.get("number", ""),
+            "message": b.get("message", ""),
+        }
+        for b in wa.get("buttons", [])
+        if b.get("enabled", True) and b.get("number")
+    ]
+    return {"enabled": True, "title": wa.get("title", "Chat with us on WhatsApp"), "buttons": buttons}
+
+
+@api_router.get("/admin/settings/whatsapp")
+async def get_whatsapp_settings(admin: User = Depends(get_current_admin)):
+    """Get WhatsApp support settings for the admin panel."""
+    settings = await db.admin_settings.find_one({"id": "admin_settings"}, {"_id": 0})
+    wa = (settings or {}).get("whatsapp")
+    return _normalize_whatsapp_settings(wa) if wa else DEFAULT_WHATSAPP_SETTINGS
+
+
+@api_router.put("/admin/settings/whatsapp")
+async def update_whatsapp_settings(wa_settings: dict, admin: User = Depends(get_current_admin)):
+    """Update WhatsApp support settings (max 3 buttons)."""
+    normalized = _normalize_whatsapp_settings(wa_settings)
+    await db.admin_settings.update_one(
+        {"id": "admin_settings"},
+        {
+            "$set": {
+                "whatsapp": normalized,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+        upsert=True,
+    )
+    return {"message": "WhatsApp settings updated successfully", "whatsapp": normalized}
+
+
 # ==================== TEAM MANAGEMENT ROUTES ====================
 
 @api_router.get("/admin/team/members")

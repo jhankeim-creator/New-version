@@ -90,51 +90,66 @@ const HomePage = () => {
     <div className="min-h-screen bg-white">
       {/* Hero Section with Background Image */}
       <section
-        className="relative h-[600px] bg-cover bg-center"
+        className="relative h-[640px] bg-cover bg-center"
         style={{
           backgroundImage: 'url(/hero-bg.png)',
           backgroundSize: 'cover',
           backgroundPosition: 'center'
         }}
       >
-        <div className="absolute inset-0 bg-black bg-opacity-50"></div>
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/45 to-black/75"></div>
         <div className="relative h-full flex items-center justify-center text-center px-4">
-          <div className="max-w-4xl">
+          <div className="max-w-4xl animate-fade-up">
+            <p className="eyebrow text-gold-300 mb-5">Timeless Elegance</p>
             <h1
-              className="text-5xl md:text-7xl font-bold text-white mb-6"
+              className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight"
               style={{ fontFamily: 'Playfair Display' }}
             >
-              Luxury Watches & Fashion
+              Luxury Watches <span className="text-gold-400">&</span> Fashion
             </h1>
-            <p className="text-xl md:text-2xl text-white mb-8">
-              Designer Watches, Clothing & Accessories
+            <p className="text-lg md:text-2xl text-white/85 mb-10 max-w-2xl mx-auto font-light">
+              Designer watches, curated clothing and exclusive accessories — crafted for those who value the finer details.
             </p>
-            <Button
-              onClick={() => navigate('/shop')}
-              size="lg"
-              className="bg-[#d4af37] hover:bg-[#b8941f] text-white text-lg px-8 py-6"
-            >
-              Shop Now
-            </Button>
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              <Button
+                onClick={() => navigate('/shop')}
+                size="lg"
+                className="btn-gold text-white text-base px-9 py-6 rounded-full shadow-luxe"
+              >
+                Shop the Collection <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+              <Button
+                onClick={() => navigate('/shop/jewelry')}
+                size="lg"
+                variant="outline"
+                className="text-base px-9 py-6 rounded-full border-white/70 text-white bg-white/5 hover:bg-white hover:text-ink"
+              >
+                Explore Jewelry
+              </Button>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Shop by Category */}
-      <section className="py-16 bg-gray-50">
+      <section className="py-20 bg-cream">
         <div className="container mx-auto px-4">
-          <h2
-            className="text-4xl md:text-5xl font-bold text-center mb-12"
-            style={{ fontFamily: 'Playfair Display' }}
-          >
-            Shop by Category
-          </h2>
+          <div className="flex flex-col items-center text-center mb-12">
+            <p className="eyebrow mb-3">Curated Selections</p>
+            <h2
+              className="text-4xl md:text-5xl font-bold mb-4"
+              style={{ fontFamily: 'Playfair Display' }}
+            >
+              Shop by Category
+            </h2>
+            <div className="gold-divider" />
+          </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {categories.map((category) => (
               <Link
                 key={category.id}
                 to={`/shop/${category.slug}`}
-                className="group relative overflow-hidden rounded-lg shadow-md hover:shadow-xl transition-all duration-300"
+                className="group relative overflow-hidden rounded-xl shadow-card ring-1 ring-black/5 hover:ring-gold-300 hover:shadow-luxe transition-all duration-300"
               >
                 <div className="aspect-square overflow-hidden">
                   <img
@@ -159,13 +174,16 @@ const HomePage = () => {
       {/* Best Sellers - Horizontal Scroll */}
       <section className="py-20 bg-white">
         <div className="container mx-auto px-4">
-          <div className="flex justify-between items-center mb-8">
-            <h2
-              className="text-4xl md:text-5xl font-bold"
-              style={{ fontFamily: 'Playfair Display' }}
-            >
-              Best Sellers
-            </h2>
+          <div className="flex justify-between items-end mb-8">
+            <div>
+              <p className="eyebrow mb-3">Most Loved</p>
+              <h2
+                className="text-4xl md:text-5xl font-bold"
+                style={{ fontFamily: 'Playfair Display' }}
+              >
+                Best Sellers
+              </h2>
+            </div>
             <div className="flex gap-2">
               <Button
                 onClick={scrollLeft}
@@ -264,21 +282,23 @@ const HomePage = () => {
       {/* Featured Products - 3 columns grid Ecwid-style */}
       <section className="py-20">
         <div className="container mx-auto px-4">
-          <div className="text-center mb-12">
+          <div className="flex flex-col items-center text-center mb-12">
+            <p className="eyebrow mb-3">Handpicked</p>
             <h2
               className="text-4xl md:text-5xl font-bold mb-4"
               style={{ fontFamily: 'Playfair Display' }}
             >
               Featured Collection
             </h2>
-            <p className="text-gray-600 text-lg">Handpicked items just for you</p>
+            <div className="gold-divider mb-4" />
+            <p className="text-ink-muted text-lg">Curated pieces, selected just for you</p>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
             {featuredProducts.map((product) => (
               <Card
                 key={product.id}
-                className="group cursor-pointer border-none shadow-md hover:shadow-2xl transition-all duration-300"
+                className="group cursor-pointer overflow-hidden rounded-xl border border-black/5 shadow-card hover:shadow-luxe hover:-translate-y-1 transition-all duration-300"
                 onClick={() => navigate(`/product/${product.id}`)}
                 data-testid={`featured-product-${product.id}`}
               >
@@ -365,7 +385,7 @@ const HomePage = () => {
               onClick={() => navigate('/shop')}
               variant="outline"
               size="lg"
-              className="border-2 border-black hover:bg-black hover:text-white"
+              className="rounded-full px-8 border-2 border-ink hover:bg-ink hover:text-white transition-colors"
             >
               View All Products <ArrowRight className="ml-2 h-5 w-5" />
             </Button>

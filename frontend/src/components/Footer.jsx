@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { MessageCircle, Mail, MapPin, Facebook, Instagram, Twitter } from 'lucide-react';
+import Logo from './Logo';
 import axios from 'axios';
 
 const Footer = () => {
@@ -39,15 +40,14 @@ const Footer = () => {
   };
 
   return (
-    <footer className="bg-[#1a1a1a] text-white">
-      <div className="container mx-auto px-4 py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+    <footer className="bg-ink text-white">
+      <div className="h-px w-full bg-gradient-to-r from-transparent via-gold-600 to-transparent" />
+      <div className="container mx-auto px-4 py-14">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
           {/* Brand */}
           <div>
-            <h3 className="text-2xl font-bold mb-4" style={{ fontFamily: 'Playfair Display' }}>
-              <span className="text-[#d4af37]">Kayee</span>01
-            </h3>
-            <p className="text-gray-400 text-sm">
+            <Logo variant="light" size={40} withTagline to={null} />
+            <p className="text-white/55 text-sm mt-5 leading-relaxed">
               Your destination for luxury watches, designer clothing and exclusive accessories.
             </p>
           </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext, useCallback } from 'react';
+import { resolveImageUrl } from '../../lib/utils';
 import { CartContext } from '../../App';
 import { Button } from '../ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
@@ -315,7 +316,7 @@ const AdminProductAdd = () => {
                     <div key={index} className="relative group">
                       <div className="aspect-square overflow-hidden rounded-lg bg-gray-100">
                         <img
-                          src={url}
+                          src={resolveImageUrl(url)}
                           alt={`Product ${index + 1}`}
                           className="w-full h-full object-cover"
                         />
@@ -342,7 +343,7 @@ const AdminProductAdd = () => {
                     <div key={index} className="relative group">
                       <div className="aspect-video overflow-hidden rounded-lg bg-gray-100">
                         <video
-                          src={url}
+                          src={resolveImageUrl(url)}
                           className="w-full h-full object-cover"
                           controls
                         />

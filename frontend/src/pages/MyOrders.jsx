@@ -1,4 +1,5 @@
 import { useEffect, useState, useContext } from 'react';
+import { resolveImageUrl } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Card, CardContent } from '../components/ui/card';
@@ -144,7 +145,7 @@ const MyOrders = () => {
                         {order.items.map((item, idx) => (
                           <div key={idx} className="flex flex-col">
                             <img
-                              src={item.image}
+                              src={resolveImageUrl(item.image)}
                               alt={item.name}
                               className="w-full h-24 object-cover mb-2"
                             />

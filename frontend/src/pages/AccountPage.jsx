@@ -1,4 +1,5 @@
 import React, { useState, useContext, useEffect } from 'react';
+import { resolveImageUrl } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
@@ -426,7 +427,7 @@ const AccountPage = () => {
                       {wishlist.map((item) => (
                         <div key={item.product_id} className="border rounded-lg overflow-hidden hover:shadow-md transition-shadow">
                           <img
-                            src={item.product_image}
+                            src={resolveImageUrl(item.product_image)}
                             alt={item.product_name}
                             className="w-full h-48 object-cover"
                           />

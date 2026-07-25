@@ -1,4 +1,5 @@
 import { useContext } from 'react';
+import { resolveImageUrl } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
@@ -56,7 +57,7 @@ const CartPage = () => {
                   data-testid={`cart-item-${item.id}`}
                 >
                   <img
-                    src={item.images[0]}
+                    src={resolveImageUrl(item.images[0])}
                     alt={item.name}
                     className="w-24 h-24 object-cover"
                   />

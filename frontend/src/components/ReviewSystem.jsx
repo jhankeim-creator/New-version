@@ -1,4 +1,5 @@
 import { useState, useContext, useCallback } from 'react';
+import { resolveImageUrl } from '../lib/utils';
 import { CartContext } from '../App';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
@@ -189,7 +190,7 @@ const ReviewSystem = ({ productId, reviews = [], onReviewSubmitted }) => {
                 {reviewImages.length > 0 && (
                   <div className="flex gap-2 mt-2">
                     {reviewImages.map((url, idx) => (
-                      <img key={idx} src={url} alt="" className="h-16 w-16 object-cover rounded" />
+                      <img key={idx} src={resolveImageUrl(url)} alt="" className="h-16 w-16 object-cover rounded" />
                     ))}
                   </div>
                 )}
@@ -247,7 +248,7 @@ const ReviewSystem = ({ productId, reviews = [], onReviewSubmitted }) => {
                     {review.images.map((img, idx) => (
                       <img
                         key={idx}
-                        src={img}
+                        src={resolveImageUrl(img)}
                         alt=""
                         className="h-24 w-24 object-cover rounded cursor-pointer hover:opacity-75"
                         onClick={() => window.open(img, '_blank')}

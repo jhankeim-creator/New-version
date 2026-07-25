@@ -1,6 +1,7 @@
 import { useState, useContext, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, User, Menu, X, Search, LogOut, Heart } from 'lucide-react';
+import { ShoppingCart, User, Menu, X, Search, LogOut, Heart, ChevronDown } from 'lucide-react';
+import axios from 'axios';
 import { CartContext } from '../App';
 import { Button } from './ui/button';
 import Logo from './Logo';
@@ -16,9 +17,10 @@ import {
 } from './ui/dropdown-menu';
 
 const Navbar = () => {
-  const { cartCount, user, logout } = useContext(CartContext);
+  const { cartCount, user, logout, API } = useContext(CartContext);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [categories, setCategories] = useState([]);
   const navigate = useNavigate();
   const { lang, setLang, t } = useI18n();
 
@@ -29,6 +31,14 @@ const Navbar = () => {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    axios.get(`${API}/categories`)
+      .then((res) => { if (active) setCategories(res.data || []); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [API]);
 
   return (
     <nav
@@ -56,12 +66,22 @@ const Navbar = () => {
             <Link to="/shop" className="nav-link">
               {t('nav.shopAll')}
             </Link>
-            <Link to="/shop/fashion" className="nav-link">
-              {t('nav.fashion')}
-            </Link>
-            <Link to="/shop/jewelry" className="nav-link">
-              {t('nav.jewelry')}
-            </Link>
+            {categories.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="nav-link inline-flex items-center gap-1 bg-transparent border-0 cursor-pointer">
+                    Categories <ChevronDown className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="max-h-[70vh] overflow-y-auto w-56">
+                  {categories.map((cat) => (
+                    <DropdownMenuItem key={cat.id} onClick={() => navigate(`/shop/${cat.slug}`)}>
+                      {cat.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             <Link to="/shop?tags=topup" className="nav-link">
               {t('nav.topup')}
             </Link>
@@ -180,20 +200,23 @@ const Navbar = () => {
             >
               {t('nav.shopAll')}
             </Link>
-            <Link
-              to="/shop/fashion"
-              className="block py-2 text-gray-700 hover:text-[#d4af37]"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              {t('nav.fashion')}
-            </Link>
-            <Link
-              to="/shop/jewelry"
-              className="block py-2 text-gray-700 hover:text-[#d4af37]"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              {t('nav.jewelry')}
-            </Link>
+            {categories.length > 0 && (
+              <div className="py-1">
+                <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Categories</p>
+                <div className="max-h-52 overflow-y-auto pl-2 border-l border-gold-100">
+                  {categories.map((cat) => (
+                    <Link
+                      key={cat.id}
+                      to={`/shop/${cat.slug}`}
+                      className="block py-1.5 text-gray-700 hover:text-[#d4af37]"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      {cat.name}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
             <Link
               to="/shop?tags=topup"
               className="block py-2 text-gray-700 hover:text-[#d4af37]"

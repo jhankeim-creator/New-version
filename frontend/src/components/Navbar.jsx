@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, User, Menu, X, Search, LogOut, Heart } from 'lucide-react';
 import { CartContext } from '../App';
 import { Button } from './ui/button';
+import Logo from './Logo';
 import SearchBar from './SearchBar';
 import { useI18n } from '../i18n';
 import {
@@ -31,19 +32,16 @@ const Navbar = () => {
 
   return (
     <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        isScrolled ? 'bg-white shadow-md' : 'bg-white/95 backdrop-blur-sm'
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b ${
+        isScrolled
+          ? 'bg-white/95 backdrop-blur-md shadow-[0_4px_20px_-8px_rgba(20,17,15,0.25)] border-gold-100'
+          : 'bg-white/90 backdrop-blur-sm border-transparent'
       }`}
     >
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-20">
           {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2">
-            <div className="text-2xl font-bold" style={{ fontFamily: 'Playfair Display' }}>
-              <span className="text-[#d4af37]">Kayee</span>
-              <span className="text-[#1a1a1a]">01</span>
-            </div>
-          </Link>
+          <Logo size={38} />
 
           {/* Search Bar (Desktop) */}
           <div className="hidden md:flex flex-1 max-w-md mx-8">
@@ -51,23 +49,23 @@ const Navbar = () => {
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
-            <Link to="/" className="text-gray-700 hover:text-[#d4af37] font-medium">
+          <div className="hidden md:flex items-center gap-8">
+            <Link to="/" className="nav-link">
               {t('nav.home')}
             </Link>
-            <Link to="/shop" className="text-gray-700 hover:text-[#d4af37] font-medium">
+            <Link to="/shop" className="nav-link">
               {t('nav.shopAll')}
             </Link>
-            <Link to="/shop/fashion" className="text-gray-700 hover:text-[#d4af37] font-medium">
+            <Link to="/shop/fashion" className="nav-link">
               {t('nav.fashion')}
             </Link>
-            <Link to="/shop/jewelry" className="text-gray-700 hover:text-[#d4af37] font-medium">
+            <Link to="/shop/jewelry" className="nav-link">
               {t('nav.jewelry')}
             </Link>
-            <Link to="/shop?tags=topup" className="text-gray-700 hover:text-[#d4af37] font-medium">
+            <Link to="/shop?tags=topup" className="nav-link">
               {t('nav.topup')}
             </Link>
-            <Link to="/track-order" className="text-gray-700 hover:text-[#d4af37] font-medium">
+            <Link to="/track-order" className="nav-link">
               {t('nav.trackOrder')}
             </Link>
           </div>

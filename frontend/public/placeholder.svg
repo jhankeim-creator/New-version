@@ -1,0 +1,10 @@
+<svg width="400" height="400" viewBox="0 0 400 400" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="400" fill="#faf7f2"/>
+  <rect x="0.5" y="0.5" width="399" height="399" fill="none" stroke="#ecd9a1" stroke-width="1"/>
+  <g opacity="0.5">
+    <rect x="170" y="150" width="60" height="60" rx="8" transform="rotate(45 200 180)" fill="#e0c274"/>
+    <text x="200" y="192" text-anchor="middle" font-family="Georgia, serif" font-size="30" font-weight="700" fill="#14110f">K</text>
+  </g>
+  <text x="200" y="268" text-anchor="middle" font-family="Inter, sans-serif" font-size="15" letter-spacing="2" fill="#a9832f">KAYEE01</text>
+  <text x="200" y="292" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#6b6560">Image unavailable</text>
+</svg>

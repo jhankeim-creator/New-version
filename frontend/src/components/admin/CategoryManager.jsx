@@ -10,7 +10,8 @@ import axios from 'axios';
 import { toast } from 'sonner';
 
 const CategoryManager = () => {
-  const { API } = useContext(CartContext);
+  const { API, token } = useContext(CartContext);
+  const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined;
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -48,7 +49,8 @@ const CategoryManager = () => {
           description: formData.description,
           parent_id: formData.parent_id,
           image: formData.image
-        }
+        },
+        headers: authHeaders
       });
       
       toast.success('Category created successfully!');
@@ -65,7 +67,7 @@ const CategoryManager = () => {
     if (!window.confirm('Delete this category?')) return;
     
     try {
-      await axios.delete(`${API}/v2/categories/${categoryId}`);
+      await axios.delete(`${API}/v2/categories/${categoryId}`, { headers: authHeaders });
       toast.success('Category deleted!');
       loadCategoriesTree();
     } catch (error) {

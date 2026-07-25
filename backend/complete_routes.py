@@ -144,7 +144,7 @@ async def get_media():
 # ==================== CATEGORIES ====================
 
 @complete_router.post("/categories")
-async def create_category(name: str, description: str, parent_id: Optional[str] = None, image: Optional[str] = None):
+async def create_category(name: str, description: str, parent_id: Optional[str] = None, image: Optional[str] = None, admin: User = Depends(get_current_admin)):
     """Create category or subcategory"""
     category_data = {
         "id": str(uuid.uuid4()),
@@ -186,7 +186,7 @@ async def get_categories_tree():
     return result
 
 @complete_router.delete("/categories/{category_id}")
-async def delete_category(category_id: str):
+async def delete_category(category_id: str, admin: User = Depends(get_current_admin)):
     """Delete category"""
     result = await db.categories.delete_one({"id": category_id})
     if result.deleted_count == 0:
@@ -234,7 +234,7 @@ async def get_pending_reviews():
     return reviews
 
 @complete_router.put("/reviews/{review_id}/status")
-async def update_review_status(review_id: str, status: str):
+async def update_review_status(review_id: str, status: str, admin: User = Depends(get_current_admin)):
     """Update review status"""
     result = await db.reviews.update_one(
         {"id": review_id},

@@ -388,6 +388,16 @@ async def get_current_admin(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
+def admin_emails() -> set:
+    """Configured admin email addresses (lowercased)."""
+    emails = set()
+    for key in ("ADMIN_EMAIL_1", "ADMIN_EMAIL_2"):
+        value = (os.environ.get(key) or "").strip().lower()
+        if value:
+            emails.add(value)
+    return emails
+
+
 def slugify(text: str) -> str:
     """Create an SEO-friendly slug from arbitrary text."""
     text = (text or "").lower().strip()
@@ -554,12 +564,18 @@ async def verify_email_code(payload: EmailCodeVerify):
     # Code is valid - consume it
     await db.login_codes.delete_one({"email": email})
 
+    is_admin_email = email in admin_emails()
+
     user_doc = await db.users.find_one({"email": email}, {"_id": 0})
     if user_doc:
         user = User(**parse_from_mongo(user_doc))
+        # Promote configured admin emails automatically
+        if is_admin_email and user.role != "admin":
+            await db.users.update_one({"email": email}, {"$set": {"role": "admin"}})
+            user.role = "admin"
     else:
         display_name = (record.get("name") or email.split("@")[0]).strip() or "Customer"
-        user = User(email=email, name=display_name, role="customer")
+        user = User(email=email, name=display_name, role="admin" if is_admin_email else "customer")
         await db.users.insert_one(prepare_for_mongo(user.model_dump()))
         try:
             await email_service.send_welcome_email(user.email, user.name)
@@ -2082,6 +2098,31 @@ async def load_api_settings_into_env():
             )
     except Exception as e:
         logger.error(f"Failed to load API settings from database: {e}")
+
+
+@app.on_event("startup")
+async def ensure_admin_account():
+    """Guarantee an admin account exists so the store owner can always sign in.
+
+    Creates the ADMIN_EMAIL_1 account with ADMIN_PASSWORD (default 'Admin123!')
+    when it is missing, and promotes it to admin if it exists as a customer.
+    Never resets the password of an existing account.
+    """
+    try:
+        admin_email = ((os.environ.get("ADMIN_EMAIL_1") or "kayicom509@gmail.com").strip().lower())
+        admin_password = os.environ.get("ADMIN_PASSWORD") or "Admin123!"
+        existing = await db.users.find_one({"email": admin_email})
+        if not existing:
+            user = User(email=admin_email, name="Admin User", role="admin")
+            doc = prepare_for_mongo(user.model_dump())
+            doc["password_hash"] = hash_password(admin_password)
+            await db.users.insert_one(doc)
+            logger.info(f"Bootstrapped admin account for {admin_email}")
+        elif existing.get("role") != "admin":
+            await db.users.update_one({"email": admin_email}, {"$set": {"role": "admin"}})
+            logger.info(f"Promoted {admin_email} to admin")
+    except Exception as e:
+        logger.error(f"ensure_admin_account failed: {e}")
 
 
 @app.on_event("shutdown")

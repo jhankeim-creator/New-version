@@ -65,6 +65,9 @@ const Navbar = () => {
             <Link to="/shop?tags=topup" className="nav-link">
               {t('nav.topup')}
             </Link>
+            <Link to="/blog" className="nav-link">
+              Blog
+            </Link>
             <Link to="/track-order" className="nav-link">
               {t('nav.trackOrder')}
             </Link>
@@ -197,6 +200,13 @@ const Navbar = () => {
               onClick={() => setIsMobileMenuOpen(false)}
             >
               {t('nav.topup')}
+            </Link>
+            <Link
+              to="/blog"
+              className="block py-2 text-gray-700 hover:text-[#d4af37]"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Blog
             </Link>
             <Link
               to="/track-order"

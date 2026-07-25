@@ -14,10 +14,11 @@ import CategoryManager from '../components/admin/CategoryManager';
 import AdminProductAdd from '../components/admin/AdminProductAdd';
 import AdminSettings from '../components/admin/AdminSettings';
 import AdminTeam from '../components/admin/AdminTeam';
+import AdminBlog from '../components/admin/AdminBlog';
 import Logo from '../components/Logo';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Package, ShoppingCart, Users, DollarSign, Home, LayoutDashboard, Tag, UserCircle, FolderTree, Settings, Plus, UsersRound } from 'lucide-react';
+import { Package, ShoppingCart, Users, DollarSign, Home, LayoutDashboard, Tag, UserCircle, FolderTree, Settings, Plus, UsersRound, Newspaper } from 'lucide-react';
 
 const AdminDashboard = () => {
   const { user, token, API } = useContext(CartContext);
@@ -111,6 +112,10 @@ const AdminDashboard = () => {
                     <FolderTree className="h-4 w-4" />
                     Categories
                   </TabsTrigger>
+                  <TabsTrigger value="blog" data-testid="tab-blog" className="flex items-center gap-2">
+                    <Newspaper className="h-4 w-4" />
+                    Blog
+                  </TabsTrigger>
                   <TabsTrigger value="team" data-testid="tab-team" className="flex items-center gap-2">
                     <UsersRound className="h-4 w-4" />
                     Team
@@ -147,6 +152,10 @@ const AdminDashboard = () => {
                 
                 <TabsContent value="categories">
                   <CategoryManager />
+                </TabsContent>
+                
+                <TabsContent value="blog">
+                  <AdminBlog />
                 </TabsContent>
                 
                 <TabsContent value="team">

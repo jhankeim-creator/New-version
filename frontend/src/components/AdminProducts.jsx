@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Edit, Trash2, Plus, Copy } from 'lucide-react';
+import { Edit, Trash2, Plus, Copy, Search, Package, LayoutGrid } from 'lucide-react';
 import ProductVariants from './ProductVariants';
 
 const AdminProducts = () => {
@@ -19,6 +19,8 @@ const AdminProducts = () => {
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -152,16 +154,44 @@ const AdminProducts = () => {
     return <div className="text-center py-8">Loading products...</div>;
   }
 
+  const categoryName = (slug) => {
+    const c = categories.find((cat) => cat.slug === slug);
+    return c ? c.name : (slug || 'Uncategorized');
+  };
+
+  // Count products per category slug (normalized)
+  const countFor = (slug) => products.filter((p) => (p.category || '') === slug).length;
+  const usedCategorySlugs = Array.from(new Set(products.map((p) => p.category || '')));
+  const orderedCategories = [
+    ...categories.filter((c) => usedCategorySlugs.includes(c.slug)),
+    ...(usedCategorySlugs.includes('') ? [{ id: '__uncat', slug: '', name: 'Uncategorized' }] : []),
+  ];
+
+  const query = searchQuery.trim().toLowerCase();
+  const filteredProducts = products.filter((p) => {
+    const inCategory = selectedCategory === 'all' || (p.category || '') === selectedCategory;
+    const matchesQuery =
+      !query ||
+      p.name?.toLowerCase().includes(query) ||
+      p.description?.toLowerCase().includes(query);
+    return inCategory && matchesQuery;
+  });
+
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Manage Products</h2>
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
+        <div>
+          <h2 className="text-2xl font-bold">Manage Products</h2>
+          <p className="text-sm text-ink-muted mt-1">
+            {products.length} products across {orderedCategories.length} categories
+          </p>
+        </div>
         <Button
           onClick={() => {
             resetForm();
             setShowDialog(true);
           }}
-          className="bg-[#d4af37] hover:bg-[#b8941f] text-white"
+          className="btn-gold text-white"
           data-testid="add-product-button"
         >
           <Plus className="mr-2 h-4 w-4" />
@@ -169,18 +199,76 @@ const AdminProducts = () => {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {products.map((product) => (
-          <div key={product.id} className="border rounded-lg p-4" data-testid={`product-item-${product.id}`}>
-            <img
-              src={resolveImageUrl(product.images[0])}
-              alt={product.name}
-              className="w-full h-40 object-cover mb-3"
-            />
+      {/* Search */}
+      <div className="relative mb-4 max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-ink-muted" />
+        <Input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search products by name or description..."
+          className="pl-9"
+          data-testid="admin-product-search"
+        />
+      </div>
+
+      {/* Category filter (normalized by category with counts) */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        <button
+          onClick={() => setSelectedCategory('all')}
+          className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            selectedCategory === 'all'
+              ? 'bg-ink text-white border-ink'
+              : 'bg-white text-ink-soft border-gold-100 hover:border-gold-300'
+          }`}
+        >
+          <LayoutGrid className="h-3.5 w-3.5" />
+          All
+          <span className="text-xs opacity-70">{products.length}</span>
+        </button>
+        {orderedCategories.map((cat) => (
+          <button
+            key={cat.id || cat.slug}
+            onClick={() => setSelectedCategory(cat.slug)}
+            className={`inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+              selectedCategory === cat.slug
+                ? 'bg-ink text-white border-ink'
+                : 'bg-white text-ink-soft border-gold-100 hover:border-gold-300'
+            }`}
+          >
+            {cat.name}
+            <span className="text-xs opacity-70">{countFor(cat.slug)}</span>
+          </button>
+        ))}
+      </div>
+
+      {filteredProducts.length === 0 ? (
+        <div className="text-center py-16 border border-dashed border-gold-200 rounded-xl bg-cream">
+          <Package className="h-10 w-10 mx-auto text-gold-400 mb-3" />
+          <p className="text-ink-muted">No products match your filters.</p>
+        </div>
+      ) : (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {filteredProducts.map((product) => (
+          <div key={product.id} className="group border border-black/5 rounded-xl p-4 bg-white shadow-card hover:shadow-luxe transition-all" data-testid={`product-item-${product.id}`}>
+            <div className="relative mb-3 overflow-hidden rounded-lg bg-cream">
+              <img
+                src={resolveImageUrl(product.images[0])}
+                alt={product.name}
+                className="w-full h-40 object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+              <span className="absolute top-2 left-2 bg-white/90 backdrop-blur px-2 py-0.5 rounded-full text-[11px] font-medium text-ink-soft border border-gold-100">
+                {categoryName(product.category)}
+              </span>
+            </div>
             <h3 className="font-semibold mb-1 line-clamp-1">{product.name}</h3>
             <p className="text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
             <div className="flex justify-between items-center mb-3">
-              <span className="font-bold text-[#d4af37]">${product.price.toFixed(2)}</span>
+              <span className="font-bold text-gold-600">${product.price.toFixed(2)}</span>
+              {typeof product.stock === 'number' && (
+                <span className={`text-xs ${product.stock > 0 ? 'text-ink-muted' : 'text-red-500'}`}>
+                  {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
+                </span>
+              )}
             </div>
             <div className="flex gap-2">
               <Button
@@ -214,6 +302,7 @@ const AdminProducts = () => {
           </div>
         ))}
       </div>
+      )}
 
       {/* Add/Edit Dialog */}
       <Dialog open={showDialog} onOpenChange={setShowDialog}>

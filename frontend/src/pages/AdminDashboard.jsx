@@ -14,6 +14,7 @@ import CategoryManager from '../components/admin/CategoryManager';
 import AdminProductAdd from '../components/admin/AdminProductAdd';
 import AdminSettings from '../components/admin/AdminSettings';
 import AdminTeam from '../components/admin/AdminTeam';
+import Logo from '../components/Logo';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { Package, ShoppingCart, Users, DollarSign, Home, LayoutDashboard, Tag, UserCircle, FolderTree, Settings, Plus, UsersRound } from 'lucide-react';
@@ -40,33 +41,48 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="pt-32 pb-20">
+    <div className="min-h-screen bg-cream">
+      {/* Admin top bar */}
+      <div className="fixed top-0 left-0 right-0 z-40 bg-ink text-white border-b border-gold-700/40">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Logo variant="light" size={30} to={null} />
+            <span className="hidden sm:inline text-xs uppercase tracking-[0.3em] text-gold-400 border-l border-white/20 pl-3">
+              Admin Console
+            </span>
+          </div>
+          <Button
+            onClick={() => navigate('/')}
+            size="sm"
+            variant="outline"
+            className="border-white/25 text-white bg-white/5 hover:bg-white hover:text-ink"
+            data-testid="back-to-store-button"
+          >
+            <Home className="mr-2 h-4 w-4" />
+            Back to Store
+          </Button>
+        </div>
+      </div>
+
+      <div className="pt-24 pb-20">
         <div className="container mx-auto px-4">
           {/* Header */}
-          <div className="flex justify-between items-center mb-8">
+          <div className="mb-8">
+            <p className="eyebrow mb-2">Management</p>
             <h1
-              className="text-4xl md:text-5xl font-bold"
+              className="text-3xl md:text-4xl font-bold"
               style={{ fontFamily: 'Playfair Display' }}
               data-testid="admin-dashboard-title"
             >
-              Admin Dashboard
+              Dashboard
             </h1>
-            <Button
-              onClick={() => navigate('/')}
-              variant="outline"
-              data-testid="back-to-store-button"
-            >
-              <Home className="mr-2 h-4 w-4" />
-              Back to Store
-            </Button>
           </div>
 
           {/* Management Tabs */}
-          <Card>
+          <Card className="border-black/5 shadow-card">
             <CardContent className="p-6">
               <Tabs defaultValue="dashboard">
-                <TabsList className="mb-6 flex flex-wrap gap-2">
+                <TabsList className="mb-6 flex flex-wrap gap-2 bg-cream border border-gold-100">
                   <TabsTrigger value="dashboard" data-testid="tab-dashboard" className="flex items-center gap-2">
                     <LayoutDashboard className="h-4 w-4" />
                     Dashboard

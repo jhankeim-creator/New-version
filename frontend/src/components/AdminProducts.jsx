@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Edit, Trash2, Plus, Copy, Search, Package, LayoutGrid } from 'lucide-react';
+import { Edit, Trash2, Plus, Copy, Search, Package, LayoutGrid, Upload } from 'lucide-react';
 import ProductVariants from './ProductVariants';
 
 const AdminProducts = () => {
@@ -21,6 +21,9 @@ const AdminProducts = () => {
   const [editingProduct, setEditingProduct] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [uploading, setUploading] = useState(false);
+  const perPage = 24;
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -37,6 +40,36 @@ const AdminProducts = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    setPage(1);
+  }, [selectedCategory, searchQuery]);
+
+  const handleUploadImage = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await axios.post(`${API}/v2/upload`, fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const url = res.data?.url;
+      if (url) {
+        setFormData((prev) => ({
+          ...prev,
+          images: prev.images ? `${prev.images}, ${url}` : url,
+        }));
+        toast.success('Image uploaded');
+      }
+    } catch (err) {
+      toast.error('Failed to upload image');
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -177,6 +210,10 @@ const AdminProducts = () => {
     return inCategory && matchesQuery;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / perPage));
+  const currentPage = Math.min(page, totalPages);
+  const pageProducts = filteredProducts.slice((currentPage - 1) * perPage, currentPage * perPage);
+
   return (
     <div>
       <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
@@ -248,7 +285,7 @@ const AdminProducts = () => {
         </div>
       ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredProducts.map((product) => (
+        {pageProducts.map((product) => (
           <div key={product.id} className="group border border-black/5 rounded-xl p-4 bg-white shadow-card hover:shadow-luxe transition-all" data-testid={`product-item-${product.id}`}>
             <div className="relative mb-3 overflow-hidden rounded-lg bg-cream">
               <img
@@ -302,6 +339,21 @@ const AdminProducts = () => {
           </div>
         ))}
       </div>
+      )}
+
+      {/* Pagination */}
+      {filteredProducts.length > perPage && (
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <Button variant="outline" size="sm" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>
+            Previous
+          </Button>
+          <span className="text-sm text-ink-muted">
+            Page {currentPage} of {totalPages}
+          </span>
+          <Button variant="outline" size="sm" disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)}>
+            Next
+          </Button>
+        </div>
       )}
 
       {/* Add/Edit Dialog */}
@@ -377,15 +429,29 @@ const AdminProducts = () => {
             <ProductVariants formData={formData} setFormData={setFormData} />
             
             <div>
-              <Label htmlFor="images">Image URLs (comma-separated) *</Label>
+              <div className="flex items-center justify-between mb-1">
+                <Label htmlFor="images">Images *</Label>
+                <label className="inline-flex items-center gap-1.5 text-sm text-gold-600 cursor-pointer hover:text-gold-700">
+                  <Upload className="h-4 w-4" />
+                  {uploading ? 'Uploading…' : 'Upload image'}
+                  <input type="file" accept="image/*" className="hidden" onChange={handleUploadImage} disabled={uploading} />
+                </label>
+              </div>
               <Textarea
                 id="images"
                 value={formData.images}
                 onChange={(e) => setFormData({ ...formData, images: e.target.value })}
-                placeholder="https://example.com/image1.jpg, https://example.com/image2.jpg"
+                placeholder="Upload above, or paste image URLs (comma-separated)"
                 required
                 rows={2}
               />
+              {formData.images && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {formData.images.split(',').map((u) => u.trim()).filter(Boolean).map((u, i) => (
+                    <img key={i} src={resolveImageUrl(u)} alt="" className="h-14 w-14 object-cover rounded border border-black/5" />
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex items-center space-x-2">
               <input

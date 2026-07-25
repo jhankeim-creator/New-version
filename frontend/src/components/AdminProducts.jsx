@@ -124,13 +124,16 @@ const AdminProducts = () => {
   const handleEdit = (product) => {
     setEditingProduct(product);
     setFormData({
-      name: product.name,
-      description: product.description,
-      price: product.price.toString(),
-      images: product.images.join(', '),
-      category: product.category,
-      stock: product.stock.toString(),
-      featured: product.featured
+      name: product.name || '',
+      description: product.description || '',
+      price: product.price != null ? product.price.toString() : '',
+      images: Array.isArray(product.images) ? product.images.join(', ') : '',
+      category: product.category || '',
+      stock: product.stock != null ? product.stock.toString() : '',
+      featured: product.featured || false,
+      has_variants: product.has_variants || false,
+      variants: Array.isArray(product.variants) ? product.variants : [],
+      variant_options: Array.isArray(product.variant_options) ? product.variant_options : []
     });
     setShowDialog(true);
   };
@@ -159,7 +162,10 @@ const AdminProducts = () => {
         images: product.images,
         category: product.category,
         stock: product.stock,
-        featured: false
+        featured: false,
+        has_variants: product.has_variants || false,
+        variants: Array.isArray(product.variants) ? product.variants : [],
+        variant_options: Array.isArray(product.variant_options) ? product.variant_options : []
       };
 
       await axios.post(`${API}/products`, duplicatedProduct, {
@@ -181,7 +187,10 @@ const AdminProducts = () => {
       images: '',
       category: '',
       stock: '',
-      featured: false
+      featured: false,
+      has_variants: false,
+      variants: [],
+      variant_options: []
     });
     setEditingProduct(null);
   };

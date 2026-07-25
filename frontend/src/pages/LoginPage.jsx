@@ -12,11 +12,61 @@ import { toast } from 'sonner';
 import { Eye, EyeOff, Mail, Lock, User, ShoppingBag } from 'lucide-react';
 
 const LoginPage = () => {
-  const { setUser, setToken, API } = useContext(CartContext);
+  const { setUser, setToken, login, API } = useContext(CartContext);
   const navigate = useNavigate();
   const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Passwordless email login
+  const [emailLogin, setEmailLogin] = useState({ email: '', name: '', code: '', sent: false });
+
+  const applySession = (data) => {
+    if (typeof login === 'function') {
+      login(data.access_token, data.user);
+    } else {
+      setUser && setUser(data.user);
+      setToken && setToken(data.access_token);
+    }
+    localStorage.setItem('token', data.access_token);
+    localStorage.setItem('user', JSON.stringify(data.user));
+  };
+
+  const requestEmailCode = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await axios.post(`${API}/auth/email/request-code`, {
+        email: emailLogin.email,
+        name: emailLogin.name || undefined,
+      });
+      setEmailLogin((s) => ({ ...s, sent: true }));
+      toast.success('We sent a 6-digit sign-in code to your email.');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Could not send code. Try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyEmailCode = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const response = await axios.post(`${API}/auth/email/verify`, {
+        email: emailLogin.email,
+        code: emailLogin.code,
+      });
+      applySession(response.data);
+      toast.success('Signed in successfully!');
+      const from = location.state?.from?.pathname || '/account';
+      navigate(from);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Invalid or expired code.');
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // Login form
   const [loginData, setLoginData] = useState({
@@ -119,8 +169,9 @@ const LoginPage = () => {
           <Card>
             <CardHeader>
               <Tabs defaultValue="login" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className="grid w-full grid-cols-3">
                   <TabsTrigger value="login">Login</TabsTrigger>
+                  <TabsTrigger value="email">Email</TabsTrigger>
                   <TabsTrigger value="register">Register</TabsTrigger>
                 </TabsList>
 
@@ -192,6 +243,81 @@ const LoginPage = () => {
                       </Link>
                     </div>
                   </form>
+                </TabsContent>
+
+                {/* Passwordless Email Tab */}
+                <TabsContent value="email">
+                  <CardTitle className="text-2xl mb-2">Sign in with Email</CardTitle>
+                  <CardDescription>
+                    No password needed — we'll email you a one-time code.
+                  </CardDescription>
+
+                  {!emailLogin.sent ? (
+                    <form onSubmit={requestEmailCode} className="space-y-4 mt-6">
+                      <div>
+                        <Label htmlFor="email-login-email">Email</Label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                          <Input
+                            id="email-login-email"
+                            type="email"
+                            placeholder="your@email.com"
+                            value={emailLogin.email}
+                            onChange={(e) => setEmailLogin({ ...emailLogin, email: e.target.value })}
+                            className="pl-10"
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label htmlFor="email-login-name">Name (optional, for new accounts)</Label>
+                        <div className="relative">
+                          <User className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                          <Input
+                            id="email-login-name"
+                            type="text"
+                            placeholder="Your name"
+                            value={emailLogin.name}
+                            onChange={(e) => setEmailLogin({ ...emailLogin, name: e.target.value })}
+                            className="pl-10"
+                          />
+                        </div>
+                      </div>
+                      <Button type="submit" className="w-full btn-gold text-white" disabled={loading}>
+                        {loading ? 'Sending code...' : 'Send sign-in code'}
+                      </Button>
+                    </form>
+                  ) : (
+                    <form onSubmit={verifyEmailCode} className="space-y-4 mt-6">
+                      <p className="text-sm text-gray-600">
+                        Enter the 6-digit code we sent to <strong>{emailLogin.email}</strong>.
+                      </p>
+                      <div>
+                        <Label htmlFor="email-login-code">Verification code</Label>
+                        <Input
+                          id="email-login-code"
+                          type="text"
+                          inputMode="numeric"
+                          maxLength={6}
+                          placeholder="123456"
+                          value={emailLogin.code}
+                          onChange={(e) => setEmailLogin({ ...emailLogin, code: e.target.value.replace(/\D/g, '') })}
+                          className="tracking-[0.5em] text-center text-lg"
+                          required
+                        />
+                      </div>
+                      <Button type="submit" className="w-full btn-gold text-white" disabled={loading}>
+                        {loading ? 'Verifying...' : 'Verify & sign in'}
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => setEmailLogin({ ...emailLogin, sent: false, code: '' })}
+                        className="w-full text-sm text-gray-500 hover:text-gray-700"
+                      >
+                        Use a different email
+                      </button>
+                    </form>
+                  )}
                 </TabsContent>
 
                 {/* Register Tab */}

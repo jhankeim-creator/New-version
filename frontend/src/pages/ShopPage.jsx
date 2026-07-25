@@ -1,5 +1,6 @@
 import { useEffect, useState, useContext } from 'react';
 import { resolveImageUrl } from '../lib/utils';
+import { useSeo } from '../lib/seo';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
@@ -24,6 +25,12 @@ const ShopPage = () => {
   // Price filter state
   const [priceRange, setPriceRange] = useState({ min: 0, max: 10000 });
   const [sortBy, setSortBy] = useState('featured'); // featured, price_asc, price_desc, newest
+
+  useSeo({
+    title: category ? `${category.charAt(0).toUpperCase()}${category.slice(1)} Collection` : 'Shop All Products',
+    description: 'Browse the full Kayee01 collection of watches, fashion and accessories.',
+    path: location.pathname,
+  });
 
   useEffect(() => {
     setPage(1);

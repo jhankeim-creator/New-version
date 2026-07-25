@@ -9,11 +9,15 @@ const ProductVariants = ({ formData, setFormData }) => {
   const [newVariantName, setNewVariantName] = useState('');
   const [newVariantValues, setNewVariantValues] = useState({});
 
+  // Defensive: variants may be missing when the form is populated from an
+  // existing product, so always fall back to an empty array.
+  const variants = Array.isArray(formData.variants) ? formData.variants : [];
+
   const addVariantType = () => {
     if (!newVariantName.trim()) return;
     
     const newVariants = [
-      ...formData.variants,
+      ...variants,
       { name: newVariantName, values: [] }
     ];
     
@@ -22,7 +26,7 @@ const ProductVariants = ({ formData, setFormData }) => {
   };
 
   const removeVariantType = (index) => {
-    const newVariants = formData.variants.filter((_, i) => i !== index);
+    const newVariants = variants.filter((_, i) => i !== index);
     setFormData({ 
       ...formData, 
       variants: newVariants,
@@ -39,7 +43,7 @@ const ProductVariants = ({ formData, setFormData }) => {
     const newVariantValue = (newVariantValues[variantIndex] || '').trim();
     if (!newVariantValue) return;
     
-    const newVariants = formData.variants.map((v, idx) => {
+    const newVariants = variants.map((v, idx) => {
       if (idx !== variantIndex) return v;
       const existing = Array.isArray(v.values) ? v.values : [];
       if (existing.includes(newVariantValue)) return v;
@@ -51,7 +55,7 @@ const ProductVariants = ({ formData, setFormData }) => {
   };
 
   const removeVariantValue = (variantIndex, valueIndex) => {
-    const newVariants = formData.variants.map((v, idx) => {
+    const newVariants = variants.map((v, idx) => {
       if (idx !== variantIndex) return v;
       const existing = Array.isArray(v.values) ? v.values : [];
       return { ...v, values: existing.filter((_, i) => i !== valueIndex) };
@@ -84,7 +88,7 @@ const ProductVariants = ({ formData, setFormData }) => {
         </div>
 
         {/* Display Variant Types and Values */}
-        {formData.variants.map((variant, variantIndex) => (
+        {variants.map((variant, variantIndex) => (
           <Card key={variantIndex} className="bg-gray-50">
             <CardContent className="p-4">
               <div className="flex justify-between items-center mb-3">
@@ -128,7 +132,7 @@ const ProductVariants = ({ formData, setFormData }) => {
 
               {/* Display Values */}
               <div className="flex flex-wrap gap-2">
-                {variant.values.map((value, valueIndex) => (
+                {(Array.isArray(variant.values) ? variant.values : []).map((value, valueIndex) => (
                   <div
                     key={valueIndex}
                     className="flex items-center gap-2 bg-white px-3 py-1 rounded-full border"
@@ -148,7 +152,7 @@ const ProductVariants = ({ formData, setFormData }) => {
           </Card>
         ))}
 
-        {formData.variants.length === 0 && (
+        {variants.length === 0 && (
           <p className="text-sm text-gray-500 text-center py-4">
             No variants added yet. Add variant types like Size or Color above.
           </p>

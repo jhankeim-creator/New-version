@@ -148,7 +148,22 @@ const ProductPage = () => {
                   {product.stock > 0 ? (product.stock <= 5 ? `Only ${product.stock} left in stock` : 'In stock') : 'Out of stock'}
                 </p>
               )}
-              <p className="text-gray-700 text-lg mb-6 leading-relaxed">{product.description}</p>
+              {product.description && (
+                <div className="mb-6">
+                  <h2 className="text-xs font-semibold uppercase tracking-[0.15em] text-ink-muted mb-2">
+                    Description
+                  </h2>
+                  <div className="text-gray-700 text-base md:text-lg leading-relaxed space-y-3">
+                    {product.description
+                      .split(/\n\s*\n|\r\n\r\n/)
+                      .map((para) => para.trim())
+                      .filter(Boolean)
+                      .map((para, idx) => (
+                        <p key={idx} className="whitespace-pre-line">{para}</p>
+                      ))}
+                  </div>
+                </div>
+              )}
 
               {/* Quantity Selector */}
               <div className="mb-6">

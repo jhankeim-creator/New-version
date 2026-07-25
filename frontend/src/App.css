@@ -86,6 +86,14 @@ h1, h2, h3, h4, h5, h6 {
 }
 .blog-content p { margin-bottom: 1.1rem; }
 .blog-content strong { color: #14110f; }
+.blog-content h3 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.2rem;
+  margin: 1.4rem 0 0.35rem;
+  color: #14110f;
+}
+.blog-content ul { margin: 0.5rem 0 1.2rem; padding-left: 1.25rem; list-style: disc; }
+.blog-content li { margin-bottom: 0.4rem; }
 
 /* Smooth transitions */
 button, a, input, select, textarea {

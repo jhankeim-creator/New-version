@@ -130,19 +130,23 @@ const ShopPage = () => {
   };
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white">
       <div className="pt-32 pb-20">
         <div className="container mx-auto px-4">
-          <h1
-            className="text-4xl md:text-5xl font-bold text-center mb-8"
-            style={{ fontFamily: 'Playfair Display' }}
-            data-testid="shop-page-title"
-          >
-            {getTitle()}
-          </h1>
+          <div className="flex flex-col items-center text-center mb-10">
+            <p className="eyebrow mb-3">The Collection</p>
+            <h1
+              className="text-4xl md:text-5xl font-bold mb-4"
+              style={{ fontFamily: 'Playfair Display' }}
+              data-testid="shop-page-title"
+            >
+              {getTitle()}
+            </h1>
+            <div className="gold-divider" />
+          </div>
 
           {/* Filters Section - Mobile Responsive */}
-          <div className="bg-gray-50 p-4 rounded-lg mb-8 space-y-4">
+          <div className="bg-cream border border-gold-100 p-4 rounded-xl mb-8 space-y-4">
             {/* Price Filter */}
             <div className="flex flex-col space-y-2">
               <span className="font-semibold text-sm">Price Range:</span>
@@ -164,7 +168,7 @@ const ShopPage = () => {
                 />
                 <button
                   onClick={() => setPriceRange({ min: 0, max: 10000 })}
-                  className="px-4 py-2 text-sm text-white bg-[#d4af37] hover:bg-[#b8941f] rounded-md whitespace-nowrap"
+                  className="btn-gold px-4 py-2 text-sm text-white rounded-md whitespace-nowrap"
                 >
                   Reset
                 </button>
@@ -205,7 +209,7 @@ const ShopPage = () => {
               {products.map((product) => (
                 <Card
                   key={product.id}
-                  className="group cursor-pointer border-none shadow-md hover:shadow-2xl transition-all duration-300"
+                  className="group cursor-pointer overflow-hidden rounded-xl border border-black/5 shadow-card hover:shadow-luxe hover:-translate-y-1 transition-all duration-300"
                   onClick={() => navigate(`/product/${product.id}`)}
                   data-testid={`product-card-${product.id}`}
                 >
@@ -276,7 +280,7 @@ const ShopPage = () => {
                             <span className="text-sm text-gray-500 line-through">${product.compare_at_price.toFixed(2)}</span>
                           </>
                         ) : (
-                          <span className="text-xl font-bold text-[#d4af37]">${product.price.toFixed(2)}</span>
+                          <span className="text-xl font-bold text-gold-600">${product.price.toFixed(2)}</span>
                         )}
                       </div>
                       <button
@@ -325,7 +329,7 @@ const ShopPage = () => {
                       key={pageNumber}
                       onClick={() => handlePageChange(pageNumber)}
                       variant={page === pageNumber ? "default" : "outline"}
-                      className={page === pageNumber ? "bg-[#d4af37] hover:bg-[#b8941f] text-white" : ""}
+                      className={page === pageNumber ? "btn-gold text-white" : ""}
                       data-testid={`page-${pageNumber}`}
                     >
                       {pageNumber}

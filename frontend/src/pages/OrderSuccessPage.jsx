@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { resolveImageUrl } from '../lib/utils';
 import { useParams, Link } from 'react-router-dom';
 import { Check, Package, MessageCircle } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -164,7 +165,7 @@ const OrderSuccessPage = () => {
                   <div className="space-y-3">
                     {order.items.map((item, idx) => (
                       <div key={idx} className="flex gap-3 pb-3 border-b last:border-b-0">
-                        <img src={item.image} alt={item.name} className="w-16 h-16 object-cover" />
+                        <img src={resolveImageUrl(item.image)} alt={item.name} className="w-16 h-16 object-cover" />
                         <div className="flex-1">
                           <p className="font-semibold">{item.name}</p>
                           <p className="text-sm text-gray-600">Quantity: {item.quantity}</p>

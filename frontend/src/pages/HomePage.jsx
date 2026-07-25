@@ -1,4 +1,5 @@
 import { useEffect, useState, useContext, useRef } from 'react';
+import { resolveImageUrl } from '../lib/utils';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, ShoppingBag, Star, ChevronLeft, ChevronRight, Heart } from 'lucide-react';
 import { CartContext } from '../App';
@@ -137,7 +138,7 @@ const HomePage = () => {
               >
                 <div className="aspect-square overflow-hidden">
                   <img
-                    src={category.image}
+                    src={resolveImageUrl(category.image)}
                     alt={category.name}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
@@ -204,7 +205,7 @@ const HomePage = () => {
                   <div className="relative overflow-hidden rounded-lg mb-4 bg-gray-100" style={{ aspectRatio: '1/1' }}>
                     {product.images && product.images[0] && (
                       <img
-                        src={product.images[0]}
+                        src={resolveImageUrl(product.images[0])}
                         alt={product.name}
                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                       />
@@ -283,7 +284,7 @@ const HomePage = () => {
               >
                 <div className="relative overflow-hidden aspect-square">
                   <img
-                    src={product.images[0]}
+                    src={resolveImageUrl(product.images[0])}
                     alt={product.name}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />

@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext } from 'react';
+import { resolveImageUrl } from '../lib/utils';
 import { CartContext } from '../App';
 import { Button } from './ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -289,7 +290,7 @@ const AdminOrders = () => {
                 <div className="space-y-2">
                   {selectedOrder.items.map((item, idx) => (
                     <div key={idx} className="flex gap-3 p-3 border rounded">
-                      <img src={item.image} alt={item.name} className="w-16 h-16 object-cover" />
+                      <img src={resolveImageUrl(item.image)} alt={item.name} className="w-16 h-16 object-cover" />
                       <div className="flex-1">
                         <p className="font-semibold">{item.name}</p>
                         <p className="text-sm text-gray-600">

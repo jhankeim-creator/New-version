@@ -1,4 +1,5 @@
 import { useState, useContext, useEffect } from 'react';
+import { resolveImageUrl } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
@@ -371,7 +372,7 @@ const CheckoutPage = () => {
                     <div className="space-y-3 max-h-64 overflow-y-auto">
                       {cart.map((item) => (
                         <div key={item.id} className="flex gap-3">
-                          <img src={item.images[0]} alt={item.name} className="w-16 h-16 object-cover" />
+                          <img src={resolveImageUrl(item.images[0])} alt={item.name} className="w-16 h-16 object-cover" />
                           <div className="flex-1">
                             <p className="font-semibold text-sm line-clamp-1">{item.name}</p>
                             <p className="text-sm text-gray-600">Qty: {item.quantity}</p>

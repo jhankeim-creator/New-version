@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext } from 'react';
+import { resolveImageUrl } from '../lib/utils';
 import { Link } from 'react-router-dom';
 import { Heart, Trash2, ShoppingCart } from 'lucide-react';
 import { Button } from '../components/ui/button';
@@ -116,7 +117,7 @@ const Wishlist = () => {
                 <Link to={`/product/${product.id}`}>
                   <div className="aspect-square overflow-hidden">
                     <img
-                      src={product.images?.[0] || '/placeholder.png'}
+                      src={resolveImageUrl(product.images?.[0])}
                       alt={product.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />

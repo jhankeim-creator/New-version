@@ -1,4 +1,5 @@
 import { useEffect, useState, useContext } from 'react';
+import { resolveImageUrl } from '../lib/utils';
 import { useParams, useNavigate } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
@@ -70,7 +71,7 @@ const ProductPage = () => {
             <div>
               <div className="mb-4">
                 <img
-                  src={product.images[selectedImage]}
+                  src={resolveImageUrl(product.images[selectedImage])}
                   alt={product.name}
                   className="w-full h-[600px] object-cover"
                   data-testid="product-main-image"
@@ -81,7 +82,7 @@ const ProductPage = () => {
                   {product.images.map((img, idx) => (
                     <img
                       key={idx}
-                      src={img}
+                      src={resolveImageUrl(img)}
                       alt={`${product.name} ${idx + 1}`}
                       className={`w-full h-24 object-cover cursor-pointer border-2 ${
                         selectedImage === idx ? 'border-[#d4af37]' : 'border-gray-200'

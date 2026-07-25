@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext } from 'react';
+import { resolveImageUrl } from '../lib/utils';
 import { CartContext } from '../App';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -123,7 +124,7 @@ const AdminCategories = () => {
         {categories.map((category) => (
           <div key={category.id} className="border rounded-lg p-4" data-testid={`category-item-${category.id}`}>
             <img
-              src={category.image}
+              src={resolveImageUrl(category.image)}
               alt={category.name}
               className="w-full h-40 object-cover mb-3 rounded"
             />

@@ -1,5 +1,5 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Request
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -49,8 +49,25 @@ security_optional = HTTPBearer(auto_error=False)
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
-# Mount uploads directory for serving uploaded files
-app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+# Serve uploaded files from local disk, falling back to MongoDB.
+# On ephemeral hosts (e.g. Render free tier) the local disk is wiped on every
+# redeploy, so files also stored in MongoDB are served from there and survive.
+@app.get("/uploads/{filename}")
+async def serve_upload(filename: str):
+    safe_name = os.path.basename(filename)  # prevent path traversal
+    file_path = UPLOADS_DIR / safe_name
+    if file_path.is_file():
+        return FileResponse(str(file_path))
+    doc = await db.media_files.find_one({"filename": safe_name})
+    if doc and doc.get("data") is not None:
+        data = bytes(doc["data"])
+        # Best-effort cache: uploaded files are immutable (uuid filenames).
+        return Response(
+            content=data,
+            media_type=doc.get("content_type") or "application/octet-stream",
+            headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        )
+    raise HTTPException(status_code=404, detail="File not found")
 
 # ===== MODELS =====
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useContext } from 'react';
+import { resolveImageUrl } from '../lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { Search, X } from 'lucide-react';
 import { Input } from './ui/input';
@@ -98,7 +99,7 @@ const SearchBar = () => {
                   >
                     {product.images && product.images.length > 0 && (
                       <img
-                        src={product.images[0]}
+                        src={resolveImageUrl(product.images[0])}
                         alt={product.name}
                         className="w-12 h-12 object-cover rounded"
                       />

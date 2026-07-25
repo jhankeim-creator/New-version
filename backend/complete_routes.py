@@ -8,9 +8,9 @@ from pydantic import BaseModel
 import os
 from datetime import datetime, timezone
 import uuid
-import shutil
 from pathlib import Path
 import sys
+from bson import Binary
 
 # Import admin auth dependency from server.py (works in local + container layouts)
 THIS_DIR = Path(__file__).resolve().parent
@@ -100,18 +100,35 @@ async def upload_file(file: UploadFile = File(...)):
     unique_name = f"{uuid.uuid4()}{file_ext}"
     file_path = UPLOAD_DIR / unique_name
     
-    # Save file
+    # Read once, then save to disk (fast path) and MongoDB (durable path)
+    contents = await file.read()
     with file_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(contents)
     
-    # Save to database
+    # Persist the bytes in MongoDB so the file survives ephemeral-disk redeploys
+    # (e.g. Render free tier). MongoDB documents are limited to 16MB; larger
+    # files stay disk-only. Small images comfortably fit.
+    MAX_DB_BYTES = 15 * 1024 * 1024
+    if len(contents) <= MAX_DB_BYTES:
+        await db.media_files.replace_one(
+            {"filename": unique_name},
+            {
+                "filename": unique_name,
+                "content_type": file.content_type,
+                "data": Binary(contents),
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            },
+            upsert=True,
+        )
+    
+    # Save metadata to database
     media = {
         "id": str(uuid.uuid4()),
         "filename": unique_name,
         "original_name": file.filename,
         "url": f"/uploads/{unique_name}",
         "type": "image" if file.content_type.startswith("image") else "video",
-        "size": file_path.stat().st_size,
+        "size": len(contents),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.media.insert_one(media)

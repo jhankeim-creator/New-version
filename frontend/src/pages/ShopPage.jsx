@@ -1,4 +1,5 @@
 import { useEffect, useState, useContext } from 'react';
+import { resolveImageUrl } from '../lib/utils';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
@@ -210,7 +211,7 @@ const ShopPage = () => {
                 >
                   <div className="relative overflow-hidden aspect-square">
                     <img
-                      src={product.images[0]}
+                      src={resolveImageUrl(product.images[0])}
                       alt={product.name}
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                     />

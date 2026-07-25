@@ -60,3 +60,7 @@ services:
     envVars:
       - key: REACT_APP_BACKEND_URL
         value: https://kayee01-backend.onrender.com
+      - key: REACT_APP_GOOGLE_SITE_VERIFICATION
+        sync: false
+      - key: REACT_APP_BING_SITE_VERIFICATION
+        sync: false

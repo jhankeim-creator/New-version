@@ -1,4 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* Single, normal, clean font used across the whole site */
+:root {
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
 
 * {
   margin: 0;
@@ -7,7 +12,7 @@
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-sans);
   background: #ffffff;
   color: #14110f;
   line-height: 1.65;
@@ -20,11 +25,18 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Playfair Display', serif;
+  font-family: var(--font-sans);
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.2;
   letter-spacing: -0.01em;
   color: #14110f;
+}
+
+/* Many components still set an inline `font-family: 'Playfair Display'`.
+   Force the normal site font everywhere so typography stays consistent
+   without having to edit every component. */
+[style*="Playfair"] {
+  font-family: var(--font-sans) !important;
 }
 
 /* Elegant small-caps eyebrow label used above section titles */
@@ -79,7 +91,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Blog article typography */
 .blog-content { color: #26221f; font-size: 1.05rem; line-height: 1.8; }
 .blog-content h2 {
-  font-family: 'Playfair Display', serif;
+  font-family: var(--font-sans);
   font-size: 1.6rem;
   margin: 2rem 0 0.75rem;
   color: #14110f;
@@ -87,7 +99,7 @@ h1, h2, h3, h4, h5, h6 {
 .blog-content p { margin-bottom: 1.1rem; }
 .blog-content strong { color: #14110f; }
 .blog-content h3 {
-  font-family: 'Playfair Display', serif;
+  font-family: var(--font-sans);
   font-size: 1.2rem;
   margin: 1.4rem 0 0.35rem;
   color: #14110f;

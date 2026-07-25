@@ -74,7 +74,7 @@ module.exports = {
   			}
   		},
   		fontFamily: {
-  			serif: ['Playfair Display', 'Georgia', 'serif'],
+  			serif: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
   			sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
   		},
   		boxShadow: {

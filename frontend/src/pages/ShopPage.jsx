@@ -10,6 +10,15 @@ import axios from 'axios';
 import { toast } from 'sonner';
 import { Heart } from 'lucide-react';
 
+// Umbrella collections map a friendly slug to the brand/type categories that
+// belong to it, so pages like /shop/jewelry aggregate related products instead
+// of being empty (the catalog is organised by brand).
+const CATEGORY_GROUPS = {
+  jewelry: ['jewelry', 'necklace', 'bracelet', 'earring', 'ring', 'cartier', 'bvlgari', 'chanel', 'dior'],
+  watches: ['watches', 'other-watche', 'rolex', 'omega', 'audemars-piguet', 'richard-mille', 'cartier', 'bvlgari', 'bell-&-ross', 'antoine-preziuso'],
+  fashion: ['fashion', 'lv', 'lv-shoes', 'gucci', 'jacket', 'belt', 'polo-short', 'balenciaga', 'armani', 'burberry', 'alexander-mcqueen', 'balmain', 'berluti', 'shoes', 'bags', 'glasses', 'perfume'],
+};
+
 const ShopPage = () => {
   const { category } = useParams();
   const { API, addToCart, token, addToWishlist } = useContext(CartContext);
@@ -87,7 +96,8 @@ const ShopPage = () => {
       });
       
       if (category) {
-        params.append('category', category);
+        const group = CATEGORY_GROUPS[category];
+        params.append('category', group ? group.join(',') : category);
       }
 
       if (tags) {
@@ -131,9 +141,15 @@ const ShopPage = () => {
   };
 
   const getTitle = () => {
-    if (category === 'fashion') return 'Fashion Collection';
-    if (category === 'jewelry') return 'Jewelry Collection';
-    return 'All Products';
+    if (!category) return 'All Products';
+    if (CATEGORY_GROUPS[category]) {
+      return `${category.charAt(0).toUpperCase()}${category.slice(1)} Collection`;
+    }
+    // Title-case a brand/type slug, e.g. "lv-shoes" -> "Lv Shoes"
+    return category
+      .split('-')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
   };
 
   return (

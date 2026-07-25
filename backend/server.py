@@ -81,9 +81,9 @@ class Category(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
-    description: str
-    image: str
-    slug: str
+    description: str = ""
+    image: str = ""
+    slug: str = ""
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class CategoryCreate(BaseModel):
@@ -538,9 +538,16 @@ async def reset_password(token: str, new_password: str):
 @api_router.get("/categories", response_model=List[Category])
 async def get_categories():
     categories = await db.categories.find({}, {"_id": 0}).to_list(100)
+    result = []
     for cat in categories:
         parse_from_mongo(cat)
-    return [Category(**cat) for cat in categories]
+        if not cat.get("slug") and cat.get("name"):
+            cat["slug"] = str(cat["name"]).lower().strip().replace(" ", "-")
+        try:
+            result.append(Category(**cat))
+        except Exception as e:
+            logger.warning(f"Skipping invalid category document {cat.get('id')}: {e}")
+    return result
 
 @api_router.post("/categories", response_model=Category)
 async def create_category(category_data: CategoryCreate, admin: User = Depends(get_current_admin)):

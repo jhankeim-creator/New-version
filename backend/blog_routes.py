@@ -161,7 +161,8 @@ def build_article(products: List[dict], categories: List[dict], stats: dict) -> 
         meta = " · ".join([x for x in [price, cat] if x] + badges)
         parts.append(f"<h3>{name}</h3>")
         line = f"<p><strong>{meta}</strong>."
-        if desc:
+        # Only add the description when it adds information beyond the name
+        if desc and desc.strip().lower() not in (name.strip().lower(), ""):
             line += f" {desc}"
         line += "</p>"
         parts.append(line)
@@ -223,7 +224,11 @@ async def generate_post() -> Optional[dict]:
     cat_counter = collections.Counter(
         p.get("category") for p in all_products if p.get("category")
     )
-    prices = [p.get("price") for p in all_products if isinstance(p.get("price"), (int, float))]
+    # Ignore non-positive and clearly erroneous outlier prices for the range
+    prices = [
+        p.get("price") for p in all_products
+        if isinstance(p.get("price"), (int, float)) and 0 < p.get("price") < 10_000_000
+    ]
     stats = {
         "total": len(all_products),
         "price_min": min(prices) if prices else None,

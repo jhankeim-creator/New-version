@@ -9,8 +9,10 @@
 body {
   font-family: 'Inter', sans-serif;
   background: #ffffff;
-  color: #1a1a1a;
-  line-height: 1.6;
+  color: #14110f;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .App {
@@ -20,8 +22,59 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-family: 'Playfair Display', serif;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  color: #14110f;
 }
+
+/* Elegant small-caps eyebrow label used above section titles */
+.eyebrow {
+  font-family: 'Inter', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #a9832f;
+}
+
+/* Thin gold divider */
+.gold-divider {
+  width: 64px;
+  height: 2px;
+  background: linear-gradient(90deg, #d4af37, #a9832f);
+  border-radius: 2px;
+}
+
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* Elegant navbar link with animated gold underline */
+.nav-link {
+  position: relative;
+  color: #26221f;
+  font-weight: 500;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+.nav-link:hover { color: #a9832f; }
+.nav-link::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -6px;
+  height: 2px;
+  width: 0;
+  background: linear-gradient(90deg, #d4af37, #a9832f);
+  transition: width 0.25s ease;
+}
+.nav-link:hover::after { width: 100%; }
+
+/* Primary gold button treatment */
+.btn-gold {
+  background: linear-gradient(135deg, #d4af37, #a9832f);
+  color: #fff;
+}
+.btn-gold:hover { filter: brightness(1.05); }
 
 /* Smooth transitions */
 button, a, input, select, textarea {

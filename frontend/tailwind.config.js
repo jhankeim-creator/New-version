@@ -13,6 +13,25 @@ module.exports = {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		colors: {
+  			gold: {
+  				DEFAULT: '#c9a24b',
+  				50: '#fbf7ec',
+  				100: '#f5ecd0',
+  				200: '#ecd9a1',
+  				300: '#e0c274',
+  				400: '#d4af37',
+  				500: '#c9a24b',
+  				600: '#a9832f',
+  				700: '#856526',
+  				800: '#5f4820',
+  				900: '#3d2f16'
+  			},
+  			ink: {
+  				DEFAULT: '#14110f',
+  				soft: '#26221f',
+  				muted: '#6b6560'
+  			},
+  			cream: '#faf7f2',
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {
@@ -54,7 +73,19 @@ module.exports = {
   				'5': 'hsl(var(--chart-5))'
   			}
   		},
+  		fontFamily: {
+  			serif: ['Playfair Display', 'Georgia', 'serif'],
+  			sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif']
+  		},
+  		boxShadow: {
+  			luxe: '0 10px 40px -12px rgba(20, 17, 15, 0.25)',
+  			card: '0 1px 2px rgba(20,17,15,0.04), 0 8px 24px -12px rgba(20,17,15,0.18)'
+  		},
   		keyframes: {
+  			'fade-up': {
+  				'0%': { opacity: '0', transform: 'translateY(12px)' },
+  				'100%': { opacity: '1', transform: 'translateY(0)' }
+  			},
   			'accordion-down': {
   				from: {
   					height: '0'
@@ -74,7 +105,8 @@ module.exports = {
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
+  			'accordion-up': 'accordion-up 0.2s ease-out',
+  			'fade-up': 'fade-up 0.6s ease-out both'
   		}
   	}
   },

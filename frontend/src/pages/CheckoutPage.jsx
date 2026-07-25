@@ -18,7 +18,8 @@ const CheckoutPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
-  const [shippingMethod, setShippingMethod] = useState('free');
+  const [shippingMethods, setShippingMethods] = useState([]);
+  const [shippingMethod, setShippingMethod] = useState('');
   const [couponCode, setCouponCode] = useState('');
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [couponApplied, setCouponApplied] = useState(false);
@@ -40,6 +41,7 @@ const CheckoutPage = () => {
       navigate('/cart');
     }
     loadPaymentGateways();
+    loadShippingMethods();
   }, [cart, navigate, orderPlaced]);
 
   const loadPaymentGateways = async () => {
@@ -51,11 +53,27 @@ const CheckoutPage = () => {
     }
   };
 
+  const loadShippingMethods = async () => {
+    try {
+      const response = await axios.get(`${API}/settings/shipping-methods`);
+      const methods = Array.isArray(response.data) ? response.data : [];
+      setShippingMethods(methods);
+      // Preselect the first available method (only if none selected yet).
+      setShippingMethod((prev) => prev || (methods[0]?.id || ''));
+    } catch (error) {
+      console.error('Failed to load shipping methods:', error);
+      const fallback = [{ id: 'free', name: 'Free Delivery', description: 'Delivery in 7-14 business days', cost: 0 }];
+      setShippingMethods(fallback);
+      setShippingMethod((prev) => prev || 'free');
+    }
+  };
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const shippingCost = shippingMethod === 'fedex' ? 10 : 0;
+  const selectedShippingMethod = shippingMethods.find((m) => m.id === shippingMethod) || null;
+  const shippingCost = selectedShippingMethod ? Number(selectedShippingMethod.cost) || 0 : 0;
   
   // Calculate crypto discount for Plisio (15%)
   const cryptoDiscount = formData.paymentMethod === 'plisio' ? cartTotal * 0.15 : 0;
@@ -95,6 +113,7 @@ const CheckoutPage = () => {
         discount_amount: couponDiscount,
         crypto_discount: cryptoDiscount,
         shipping_method: shippingMethod,
+        shipping_method_name: selectedShippingMethod?.name || null,
         shipping_cost: shippingCost,
         payment_method: formData.paymentMethod,
         shipping_address: {
@@ -259,45 +278,46 @@ const CheckoutPage = () => {
                 {/* Shipping Method */}
                 <Card>
                   <CardHeader>
-                    <CardTitle>Shipping Method</CardTitle>
+                    <CardTitle className="flex items-center">
+                      <Truck className="h-5 w-5 mr-2 text-[#d4af37]" />
+                      Shipping Method
+                    </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <RadioGroup
-                      value={shippingMethod}
-                      onValueChange={setShippingMethod}
-                    >
-                      <div
-                        className="flex items-start space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50"
-                        onClick={() => setShippingMethod('free')}
+                    {shippingMethods.length === 0 ? (
+                      <p className="text-sm text-gray-500">Loading delivery options...</p>
+                    ) : (
+                      <RadioGroup
+                        value={shippingMethod}
+                        onValueChange={setShippingMethod}
+                        data-testid="shipping-method-selector"
                       >
-                        <RadioGroupItem value="free" id="free" />
-                        <div className="flex-1">
-                          <Label htmlFor="free" className="cursor-pointer">
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold">Free Delivery</span>
-                              <span className="text-[#d4af37] font-bold">$0.00</span>
+                        {shippingMethods.map((method) => (
+                          <div
+                            key={method.id}
+                            className="flex items-start space-x-3 p-3 sm:p-4 border rounded-lg cursor-pointer hover:bg-gray-50"
+                            onClick={() => setShippingMethod(method.id)}
+                          >
+                            <RadioGroupItem value={method.id} id={`ship-${method.id}`} />
+                            <div className="flex-1 min-w-0">
+                              <Label htmlFor={`ship-${method.id}`} className="cursor-pointer">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="font-semibold break-words">{method.name}</span>
+                                  <span className="text-[#d4af37] font-bold whitespace-nowrap">
+                                    {Number(method.cost) > 0 ? `$${Number(method.cost).toFixed(2)}` : 'FREE'}
+                                  </span>
+                                </div>
+                              </Label>
+                              {(method.description || method.estimated_days) && (
+                                <p className="text-sm text-gray-600 mt-1 break-words">
+                                  {method.description || `Delivery in ${method.estimated_days}`}
+                                </p>
+                              )}
                             </div>
-                          </Label>
-                          <p className="text-sm text-gray-600 mt-1">Delivery in 7-14 business days</p>
-                        </div>
-                      </div>
-
-                      <div
-                        className="flex items-start space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50"
-                        onClick={() => setShippingMethod('fedex')}
-                      >
-                        <RadioGroupItem value="fedex" id="fedex" />
-                        <div className="flex-1">
-                          <Label htmlFor="fedex" className="cursor-pointer">
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold">FedEx Express</span>
-                              <span className="text-[#d4af37] font-bold">$10.00</span>
-                            </div>
-                          </Label>
-                          <p className="text-sm text-gray-600 mt-1">Delivery in 5-7 business days</p>
-                        </div>
-                      </div>
-                    </RadioGroup>
+                          </div>
+                        ))}
+                      </RadioGroup>
+                    )}
                   </CardContent>
                 </Card>
 
@@ -402,9 +422,11 @@ const CheckoutPage = () => {
                       )}
                       
                       <div className="flex justify-between">
-                        <span className="text-gray-600">Shipping</span>
+                        <span className="text-gray-600">
+                          Shipping{selectedShippingMethod ? ` (${selectedShippingMethod.name})` : ''}
+                        </span>
                         <span className="font-semibold">
-                          {shippingMethod === 'fedex' ? '$10.00' : 'FREE'}
+                          {shippingCost > 0 ? `$${shippingCost.toFixed(2)}` : 'FREE'}
                         </span>
                       </div>
                       <div className="border-t pt-2 flex justify-between text-lg font-bold">

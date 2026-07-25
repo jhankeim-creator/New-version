@@ -278,6 +278,15 @@ const AdminOrders = () => {
                 </p>
               </div>
 
+              <div>
+                <p className="text-sm text-gray-600 mb-1">Delivery Method</p>
+                <p className="font-semibold">
+                  {selectedOrder.shipping_method_name || selectedOrder.shipping_method || 'Free Delivery'}
+                  {' — '}
+                  {Number(selectedOrder.shipping_cost) > 0 ? `$${Number(selectedOrder.shipping_cost).toFixed(2)}` : 'FREE'}
+                </p>
+              </div>
+
               {selectedOrder.notes && (
                 <div>
                   <p className="text-sm text-gray-600 mb-1">Order Notes</p>

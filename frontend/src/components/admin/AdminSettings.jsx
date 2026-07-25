@@ -8,7 +8,7 @@ import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { CartContext } from '../../App';
-import { Plus, Trash2, Save, Settings, Link as LinkIcon, Bell, Mail, CreditCard, Eye, EyeOff, Key, MessageCircle } from 'lucide-react';
+import { Plus, Trash2, Save, Settings, Link as LinkIcon, Bell, Mail, CreditCard, Eye, EyeOff, Key, MessageCircle, Truck, Pencil, X } from 'lucide-react';
 
 const AdminSettings = () => {
   const { API, token } = useContext(CartContext);
@@ -25,6 +25,13 @@ const AdminSettings = () => {
     enabled: true,
     instructions: ''
   });
+
+  // Shipping / Delivery Methods State
+  const emptyShippingMethod = () => ({ name: '', description: '', cost: 0, estimated_days: '', enabled: true, order: 0 });
+  const [shippingMethods, setShippingMethods] = useState([]);
+  const [newShippingMethod, setNewShippingMethod] = useState(emptyShippingMethod());
+  const [editingShippingId, setEditingShippingId] = useState(null);
+  const [editShippingData, setEditShippingData] = useState(emptyShippingMethod());
 
   // Social Links State
   const [socialLinks, setSocialLinks] = useState([]);
@@ -92,6 +99,9 @@ const AdminSettings = () => {
       if (activeTab === 'payment') {
         const res = await axios.get(`${API}/admin/settings/payment-gateways`, { headers });
         setPaymentGateways(res.data);
+      } else if (activeTab === 'shipping') {
+        const res = await axios.get(`${API}/admin/settings/shipping-methods`, { headers });
+        setShippingMethods(res.data);
       } else if (activeTab === 'social') {
         const res = await axios.get(`${API}/admin/settings/social-links`, { headers });
         setSocialLinks(res.data);
@@ -172,6 +182,89 @@ const AdminSettings = () => {
       loadData();
     } catch (error) {
       toast.error('Failed to delete payment gateway');
+    }
+  };
+
+  // Shipping / Delivery Method Functions
+  const normalizeShipping = (data) => ({
+    name: (data.name || '').trim(),
+    description: (data.description || '').trim(),
+    cost: parseFloat(data.cost) || 0,
+    estimated_days: (data.estimated_days || '').trim(),
+    enabled: data.enabled !== false,
+    order: parseInt(data.order, 10) || 0,
+  });
+
+  const addShippingMethod = async () => {
+    if (!newShippingMethod.name.trim()) {
+      toast.error('Please enter a delivery method name');
+      return;
+    }
+    try {
+      setLoading(true);
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.post(`${API}/admin/settings/shipping-methods`, normalizeShipping(newShippingMethod), { headers });
+      toast.success('Delivery method added successfully!');
+      setNewShippingMethod(emptyShippingMethod());
+      await loadData();
+    } catch (error) {
+      console.error('Failed to add delivery method:', error);
+      toast.error(error.response?.data?.detail || 'Failed to add delivery method');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const startEditShipping = (method) => {
+    setEditingShippingId(method.id);
+    setEditShippingData({
+      name: method.name || '',
+      description: method.description || '',
+      cost: method.cost ?? 0,
+      estimated_days: method.estimated_days || '',
+      enabled: method.enabled !== false,
+      order: method.order || 0,
+    });
+  };
+
+  const cancelEditShipping = () => {
+    setEditingShippingId(null);
+    setEditShippingData(emptyShippingMethod());
+  };
+
+  const saveEditShipping = async (methodId) => {
+    if (!editShippingData.name.trim()) {
+      toast.error('Please enter a delivery method name');
+      return;
+    }
+    try {
+      setLoading(true);
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.put(`${API}/admin/settings/shipping-methods/${methodId}`, normalizeShipping(editShippingData), { headers });
+      toast.success('Delivery method updated');
+      cancelEditShipping();
+      await loadData();
+    } catch (error) {
+      console.error('Failed to update delivery method:', error);
+      toast.error(error.response?.data?.detail || 'Failed to update delivery method');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteShippingMethod = async (methodId) => {
+    if (!window.confirm('Are you sure you want to delete this delivery method?')) return;
+    try {
+      setLoading(true);
+      const headers = { Authorization: `Bearer ${token}` };
+      await axios.delete(`${API}/admin/settings/shipping-methods/${methodId}`, { headers });
+      toast.success('Delivery method deleted');
+      await loadData();
+    } catch (error) {
+      console.error('Failed to delete delivery method:', error);
+      toast.error(error.response?.data?.detail || 'Failed to delete delivery method');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -371,6 +464,7 @@ const AdminSettings = () => {
 
   const tabs = [
     { id: 'payment', label: 'Payment Gateways', icon: CreditCard },
+    { id: 'shipping', label: 'Delivery Methods', icon: Truck },
     { id: 'social', label: 'Social Links', icon: LinkIcon },
     { id: 'external', label: 'External Links', icon: LinkIcon },
     { id: 'announcement', label: 'Floating Announcement', icon: Bell },
@@ -505,6 +599,170 @@ const AdminSettings = () => {
                 ))}
                 {paymentGateways.length === 0 && (
                   <p className="text-center text-gray-500 py-8">No payment gateways configured yet</p>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Delivery Methods Tab */}
+      {activeTab === 'shipping' && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <Truck className="h-5 w-5 mr-2 text-[#d4af37]" />
+                Add Delivery Method
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Name *</Label>
+                  <Input
+                    value={newShippingMethod.name}
+                    onChange={(e) => setNewShippingMethod({ ...newShippingMethod, name: e.target.value })}
+                    placeholder="e.g., Free Delivery, FedEx Express"
+                  />
+                </div>
+                <div>
+                  <Label>Cost (USD)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={newShippingMethod.cost}
+                    onChange={(e) => setNewShippingMethod({ ...newShippingMethod, cost: e.target.value })}
+                    placeholder="0.00"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Description</Label>
+                  <Input
+                    value={newShippingMethod.description}
+                    onChange={(e) => setNewShippingMethod({ ...newShippingMethod, description: e.target.value })}
+                    placeholder="e.g., Delivery in 7-14 business days"
+                  />
+                </div>
+                <div>
+                  <Label>Display Order</Label>
+                  <Input
+                    type="number"
+                    value={newShippingMethod.order}
+                    onChange={(e) => setNewShippingMethod({ ...newShippingMethod, order: e.target.value })}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={newShippingMethod.enabled}
+                  onCheckedChange={(checked) => setNewShippingMethod({ ...newShippingMethod, enabled: checked })}
+                />
+                <Label>Enabled (visible at checkout)</Label>
+              </div>
+              <Button onClick={addShippingMethod} className="bg-[#d4af37] hover:bg-[#b8941f]" disabled={loading}>
+                <Plus className="h-4 w-4 mr-2" />
+                {loading ? 'Adding...' : 'Add Delivery Method'}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg md:text-xl">Delivery Methods ({shippingMethods.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {shippingMethods.map((method) => (
+                  <div key={method.id} className="p-3 md:p-4 border rounded">
+                    {editingShippingId === method.id ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <Label>Name *</Label>
+                            <Input
+                              value={editShippingData.name}
+                              onChange={(e) => setEditShippingData({ ...editShippingData, name: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <Label>Cost (USD)</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={editShippingData.cost}
+                              onChange={(e) => setEditShippingData({ ...editShippingData, cost: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <Label>Description</Label>
+                            <Input
+                              value={editShippingData.description}
+                              onChange={(e) => setEditShippingData({ ...editShippingData, description: e.target.value })}
+                            />
+                          </div>
+                          <div>
+                            <Label>Display Order</Label>
+                            <Input
+                              type="number"
+                              value={editShippingData.order}
+                              onChange={(e) => setEditShippingData({ ...editShippingData, order: e.target.value })}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={editShippingData.enabled}
+                            onCheckedChange={(checked) => setEditShippingData({ ...editShippingData, enabled: checked })}
+                          />
+                          <Label>Enabled</Label>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button onClick={() => saveEditShipping(method.id)} className="bg-[#d4af37] hover:bg-[#b8941f]" size="sm" disabled={loading}>
+                            <Save className="h-4 w-4 mr-1" /> Save
+                          </Button>
+                          <Button onClick={cancelEditShipping} variant="outline" size="sm">
+                            <X className="h-4 w-4 mr-1" /> Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-sm md:text-base break-words">
+                            {method.name}
+                            {method.enabled === false && (
+                              <span className="ml-2 text-xs px-2 py-0.5 bg-gray-200 text-gray-600 rounded">Disabled</span>
+                            )}
+                          </p>
+                          {method.description && (
+                            <p className="text-xs md:text-sm text-gray-600 break-words">{method.description}</p>
+                          )}
+                          <p className="text-xs text-gray-500 mt-1">
+                            Cost: {Number(method.cost) > 0 ? `$${Number(method.cost).toFixed(2)}` : 'FREE'}
+                          </p>
+                        </div>
+                        <div className="flex gap-2 shrink-0">
+                          <Button onClick={() => startEditShipping(method)} variant="outline" size="sm">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button onClick={() => deleteShippingMethod(method.id)} variant="destructive" size="sm">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {shippingMethods.length === 0 && (
+                  <p className="text-center text-gray-500 py-8">No delivery methods configured yet</p>
                 )}
               </div>
             </CardContent>

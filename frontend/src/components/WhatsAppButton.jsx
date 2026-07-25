@@ -59,7 +59,7 @@ const WhatsAppButton = () => {
       {open && (
         <div className="flex flex-col items-end gap-2 mb-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
           {settings.title && (
-            <span className="mb-1 rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-gray-700 shadow-md">
+            <span className="mb-1 max-w-[70vw] truncate rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-gray-700 shadow-md">
               {settings.title}
             </span>
           )}
@@ -72,8 +72,8 @@ const WhatsAppButton = () => {
               className="group flex items-center gap-3 rounded-full bg-white py-2 pl-4 pr-2 shadow-lg transition-all duration-200 hover:-translate-x-1 hover:shadow-xl"
               data-testid={`whatsapp-button-${b.id}`}
             >
-              <span className="text-sm font-medium text-gray-800 group-hover:text-[#128C7E]">{b.label}</span>
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#25D366] text-white">
+              <span className="max-w-[55vw] truncate text-sm font-medium text-gray-800 group-hover:text-[#128C7E]">{b.label}</span>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#25D366] text-white">
                 <MessageCircle className="h-5 w-5" />
               </span>
             </a>

@@ -23,6 +23,9 @@ const AdminProducts = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [uploading, setUploading] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkCategory, setBulkCategory] = useState('');
   const perPage = 24;
   const [formData, setFormData] = useState({
     name: '',
@@ -183,6 +186,55 @@ const AdminProducts = () => {
     setEditingProduct(null);
   };
 
+  const toggleSelect = (id) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : undefined);
+
+  const runBulk = async (fn, successMsg) => {
+    setBulkBusy(true);
+    try {
+      for (const id of selectedIds) {
+        // sequential to stay gentle on the free-tier backend
+        await fn(id); // eslint-disable-line no-await-in-loop
+      }
+      toast.success(successMsg);
+      setSelectedIds([]);
+      await loadData();
+    } catch (e) {
+      toast.error('Bulk action failed on one or more items');
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const bulkDelete = () => {
+    if (!window.confirm(`Delete ${selectedIds.length} selected product(s)? This cannot be undone.`)) return;
+    runBulk(
+      (id) => axios.delete(`${API}/products/${id}`, { headers: authHeaders() }),
+      'Selected products deleted'
+    );
+  };
+
+  const bulkSetFeatured = (featured) => {
+    runBulk(
+      (id) => axios.put(`${API}/products/${id}`, { featured }, { headers: authHeaders() }),
+      featured ? 'Marked as featured' : 'Removed from featured'
+    );
+  };
+
+  const bulkAssignCategory = () => {
+    if (!bulkCategory) {
+      toast.error('Choose a category first');
+      return;
+    }
+    runBulk(
+      (id) => axios.put(`${API}/products/${id}`, { category: bulkCategory }, { headers: authHeaders() }),
+      'Category updated for selected products'
+    );
+  };
+
   if (loading) {
     return <div className="text-center py-8">Loading products...</div>;
   }
@@ -278,6 +330,47 @@ const AdminProducts = () => {
         ))}
       </div>
 
+      {/* Bulk actions toolbar */}
+      {pageProducts.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 mb-4 p-3 rounded-xl bg-cream border border-gold-100">
+          <label className="inline-flex items-center gap-2 text-sm font-medium cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[#a9832f]"
+              checked={pageProducts.every((p) => selectedIds.includes(p.id))}
+              onChange={(e) =>
+                setSelectedIds(
+                  e.target.checked
+                    ? Array.from(new Set([...selectedIds, ...pageProducts.map((p) => p.id)]))
+                    : selectedIds.filter((id) => !pageProducts.some((p) => p.id === id))
+                )
+              }
+            />
+            Select page
+          </label>
+          <span className="text-sm text-ink-muted">{selectedIds.length} selected</span>
+          {selectedIds.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 ml-auto">
+              <select
+                value={bulkCategory}
+                onChange={(e) => setBulkCategory(e.target.value)}
+                className="border border-gold-200 rounded-md px-2 py-1.5 text-sm bg-white"
+              >
+                <option value="">Move to category…</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.slug}>{c.name}</option>
+                ))}
+              </select>
+              <Button size="sm" variant="outline" disabled={bulkBusy} onClick={bulkAssignCategory}>Apply</Button>
+              <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => bulkSetFeatured(true)}>Feature</Button>
+              <Button size="sm" variant="outline" disabled={bulkBusy} onClick={() => bulkSetFeatured(false)}>Unfeature</Button>
+              <Button size="sm" variant="outline" disabled={bulkBusy} className="text-red-600 hover:text-red-700" onClick={bulkDelete}>Delete</Button>
+              <Button size="sm" variant="ghost" disabled={bulkBusy} onClick={() => setSelectedIds([])}>Clear</Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {filteredProducts.length === 0 ? (
         <div className="text-center py-16 border border-dashed border-gold-200 rounded-xl bg-cream">
           <Package className="h-10 w-10 mx-auto text-gold-400 mb-3" />
@@ -286,14 +379,23 @@ const AdminProducts = () => {
       ) : (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {pageProducts.map((product) => (
-          <div key={product.id} className="group border border-black/5 rounded-xl p-4 bg-white shadow-card hover:shadow-luxe transition-all" data-testid={`product-item-${product.id}`}>
+          <div key={product.id} className={`group border rounded-xl p-4 bg-white shadow-card hover:shadow-luxe transition-all ${selectedIds.includes(product.id) ? 'border-gold-400 ring-1 ring-gold-300' : 'border-black/5'}`} data-testid={`product-item-${product.id}`}>
             <div className="relative mb-3 overflow-hidden rounded-lg bg-cream">
               <img
                 src={resolveImageUrl(product.images[0])}
                 alt={product.name}
                 className="w-full h-40 object-cover transition-transform duration-300 group-hover:scale-105"
               />
-              <span className="absolute top-2 left-2 bg-white/90 backdrop-blur px-2 py-0.5 rounded-full text-[11px] font-medium text-ink-soft border border-gold-100">
+              <label className="absolute top-2 left-2 flex h-6 w-6 items-center justify-center rounded-md bg-white/90 backdrop-blur border border-gold-100 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-[#a9832f]"
+                  checked={selectedIds.includes(product.id)}
+                  onChange={() => toggleSelect(product.id)}
+                  aria-label={`Select ${product.name}`}
+                />
+              </label>
+              <span className="absolute top-2 right-2 bg-white/90 backdrop-blur px-2 py-0.5 rounded-full text-[11px] font-medium text-ink-soft border border-gold-100">
                 {categoryName(product.category)}
               </span>
             </div>

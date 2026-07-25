@@ -20,7 +20,7 @@ import {
   ResponsiveContainer
 } from 'recharts';
 
-const AdminDashboard = () => {
+const AdminDashboard = ({ onNavigate }) => {
   const { API, token } = useContext(CartContext);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -88,7 +88,8 @@ const AdminDashboard = () => {
       subtitle: "Needs attention",
       icon: ShoppingCart,
       color: "text-orange-600",
-      bgColor: "bg-orange-50"
+      bgColor: "bg-orange-50",
+      goTo: "orders"
     },
     {
       title: "Low Stock Items",
@@ -96,7 +97,8 @@ const AdminDashboard = () => {
       subtitle: "Needs restock",
       icon: AlertTriangle,
       color: "text-red-600",
-      bgColor: "bg-red-50"
+      bgColor: "bg-red-50",
+      goTo: "products"
     },
     {
       title: "Total Sales",
@@ -121,7 +123,11 @@ const AdminDashboard = () => {
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {statCards.map((stat, index) => (
-          <Card key={index} className="hover:shadow-lg transition-shadow">
+          <Card
+            key={index}
+            onClick={() => stat.goTo && onNavigate && onNavigate(stat.goTo)}
+            className={`hover:shadow-lg transition-shadow ${stat.goTo && onNavigate ? 'cursor-pointer' : ''}`}
+          >
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>

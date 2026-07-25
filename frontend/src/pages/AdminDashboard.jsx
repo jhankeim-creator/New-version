@@ -23,6 +23,7 @@ import { Package, ShoppingCart, Users, DollarSign, Home, LayoutDashboard, Tag, U
 const AdminDashboard = () => {
   const { user, token, API } = useContext(CartContext);
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   useEffect(() => {
     if (!user || !token) {
@@ -79,11 +80,9 @@ const AdminDashboard = () => {
             </h1>
           </div>
 
-          {/* Management Tabs */}
-          <Card className="border-black/5 shadow-card">
-            <CardContent className="p-6">
-              <Tabs defaultValue="dashboard">
-                <TabsList className="mb-6 flex flex-wrap gap-2 bg-cream border border-gold-100">
+          {/* Management Tabs — sidebar on desktop, scrollable bar on mobile */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="lg:flex lg:gap-6 lg:items-start">
+            <TabsList className="mb-4 lg:mb-0 flex lg:flex-col lg:w-56 lg:shrink-0 gap-1.5 bg-cream border border-gold-100 rounded-xl p-2 overflow-x-auto flex-nowrap lg:sticky lg:top-24 h-auto justify-start [&_button]:shrink-0 [&_button]:whitespace-nowrap lg:[&_button]:w-full lg:[&_button]:justify-start">
                   <TabsTrigger value="dashboard" data-testid="tab-dashboard" className="flex items-center gap-2">
                     <LayoutDashboard className="h-4 w-4" />
                     Dashboard
@@ -124,50 +123,52 @@ const AdminDashboard = () => {
                     <Settings className="h-4 w-4" />
                     Settings
                   </TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="dashboard">
-                  <AdminDashboardStats />
+            </TabsList>
+
+            <Card className="flex-1 min-w-0 w-full border-black/5 shadow-card">
+              <CardContent className="p-4 sm:p-6">
+                <TabsContent value="dashboard" className="mt-0">
+                  <AdminDashboardStats onNavigate={setActiveTab} />
                 </TabsContent>
-                
-                <TabsContent value="add-product">
+
+                <TabsContent value="add-product" className="mt-0">
                   <AdminProductAdd />
                 </TabsContent>
-                
-                <TabsContent value="products">
+
+                <TabsContent value="products" className="mt-0">
                   <AdminProducts />
                 </TabsContent>
-                
-                <TabsContent value="orders">
+
+                <TabsContent value="orders" className="mt-0">
                   <AdminOrders />
                 </TabsContent>
-                
-                <TabsContent value="customers">
+
+                <TabsContent value="customers" className="mt-0">
                   <AdminCustomers />
                 </TabsContent>
-                
-                <TabsContent value="coupons">
+
+                <TabsContent value="coupons" className="mt-0">
                   <AdminCoupons />
                 </TabsContent>
-                
-                <TabsContent value="categories">
+
+                <TabsContent value="categories" className="mt-0">
                   <CategoryManager />
                 </TabsContent>
-                
-                <TabsContent value="blog">
+
+                <TabsContent value="blog" className="mt-0">
                   <AdminBlog />
                 </TabsContent>
-                
-                <TabsContent value="team">
+
+                <TabsContent value="team" className="mt-0">
                   <AdminTeam />
                 </TabsContent>
-                
-                <TabsContent value="settings">
+
+                <TabsContent value="settings" className="mt-0">
                   <AdminSettings />
                 </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Tabs>
         </div>
       </div>
     </div>

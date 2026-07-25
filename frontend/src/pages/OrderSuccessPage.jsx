@@ -6,16 +6,19 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import Footer from '../components/Footer';
 import axios from 'axios';
+import { fetchWhatsappSettings, buildWaLink, DEFAULT_WHATSAPP } from '../lib/whatsapp';
 
 const OrderSuccessPage = () => {
   const { orderId } = useParams();
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [whatsapp, setWhatsapp] = useState(DEFAULT_WHATSAPP);
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const API = `${BACKEND_URL}/api`;
 
   useEffect(() => {
     loadOrder();
+    fetchWhatsappSettings(API).then(setWhatsapp);
   }, [orderId]);
 
   const loadOrder = async () => {
@@ -29,8 +32,12 @@ const OrderSuccessPage = () => {
     }
   };
 
-  const whatsappNumber = '+12393293813';
-  const whatsappLink = `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}?text=Hi, I have a question about order ${order?.order_number}`;
+  const primaryContact = (whatsapp.buttons && whatsapp.buttons[0]) || null;
+  const whatsappNumber = primaryContact ? primaryContact.number : '';
+  const whatsappLink = buildWaLink(
+    whatsappNumber,
+    `Hi, I have a question about order ${order?.order_number || ''}`
+  );
 
   if (loading) {
     return (
@@ -152,7 +159,7 @@ const OrderSuccessPage = () => {
                       
                       <div className="bg-green-50 p-4 rounded border border-green-200 mt-3">
                         <p className="text-gray-700 text-center">
-                          Need help? Contact us on WhatsApp: <strong>+12393293813</strong>
+                          Need help? Contact us on WhatsApp: <strong>{whatsappNumber}</strong>
                         </p>
                       </div>
                     </div>

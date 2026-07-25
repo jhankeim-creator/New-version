@@ -3,14 +3,20 @@ import { Link } from 'react-router-dom';
 import { MessageCircle, Mail, MapPin, Facebook, Instagram, Twitter } from 'lucide-react';
 import Logo from './Logo';
 import axios from 'axios';
+import { fetchWhatsappSettings, buildWaLink, DEFAULT_WHATSAPP } from '../lib/whatsapp';
 
 const Footer = () => {
-  const whatsappNumber = '+12393293813';
-  const whatsappLink = `https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}`;
   const [socialLinks, setSocialLinks] = useState([]);
   const [externalLinks, setExternalLinks] = useState([]);
+  const [whatsapp, setWhatsapp] = useState(DEFAULT_WHATSAPP);
   const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
   const API = `${BACKEND_URL}/api`;
+
+  // Primary (first enabled) support contact drives the footer link.
+  const primaryContact = (whatsapp.buttons && whatsapp.buttons[0]) || null;
+  const whatsappLink = primaryContact
+    ? buildWaLink(primaryContact.number, primaryContact.message)
+    : null;
 
   useEffect(() => {
     loadLinks();
@@ -18,12 +24,14 @@ const Footer = () => {
 
   const loadLinks = async () => {
     try {
-      const [socialRes, externalRes] = await Promise.all([
+      const [socialRes, externalRes, waSettings] = await Promise.all([
         axios.get(`${API}/settings/social-links`),
-        axios.get(`${API}/settings/external-links`)
+        axios.get(`${API}/settings/external-links`),
+        fetchWhatsappSettings(API)
       ]);
       setSocialLinks(socialRes.data);
       setExternalLinks(externalRes.data);
+      setWhatsapp(waSettings);
     } catch (error) {
       console.error('Failed to load links:', error);
     }
@@ -111,12 +119,14 @@ const Footer = () => {
                   FAQ
                 </Link>
               </li>
-              <li>
-                <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-[#d4af37] flex items-center">
-                  <MessageCircle className="h-4 w-4 mr-2" />
-                  WhatsApp Support
-                </a>
-              </li>
+              {whatsappLink && (
+                <li>
+                  <a href={whatsappLink} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-[#d4af37] flex items-center">
+                    <MessageCircle className="h-4 w-4 mr-2" />
+                    WhatsApp Support
+                  </a>
+                </li>
+              )}
               <li>
                 <a href="mailto:kayee01.shop@gmail.com" className="text-gray-400 hover:text-[#d4af37] flex items-center">
                   <Mail className="h-4 w-4 mr-2" />

@@ -2,7 +2,7 @@ import { useEffect, useState, useContext, useRef } from 'react';
 import { resolveImageUrl } from '../lib/utils';
 import { useSeo } from '../lib/seo';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, ShoppingBag, Star, ChevronLeft, ChevronRight, Heart } from 'lucide-react';
+import { ArrowRight, ShoppingBag, Star, ChevronLeft, ChevronRight, Heart, Truck, ShieldCheck, Headphones, BadgeCheck } from 'lucide-react';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
@@ -134,6 +134,28 @@ const HomePage = () => {
                 Explore Jewelry
               </Button>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Trust / Benefits Bar */}
+      <section className="border-b border-gray-100 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 divide-x divide-gray-100">
+            {[
+              { icon: Truck, title: 'Worldwide Shipping', text: 'Fast, tracked delivery' },
+              { icon: ShieldCheck, title: 'Secure Payments', text: 'Card & crypto protected' },
+              { icon: BadgeCheck, title: 'Premium Quality', text: 'Curated 1:1 luxury' },
+              { icon: Headphones, title: 'Dedicated Support', text: 'WhatsApp assistance' },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center justify-center gap-3 py-6 px-2 text-center sm:text-left">
+                <item.icon className="h-7 w-7 text-[#d4af37] flex-shrink-0" />
+                <div>
+                  <p className="font-semibold text-sm md:text-base text-gray-900">{item.title}</p>
+                  <p className="text-xs md:text-sm text-gray-500">{item.text}</p>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>

@@ -8,7 +8,7 @@ import { Switch } from '../ui/switch';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { CartContext } from '../../App';
-import { Plus, Trash2, Save, Settings, Link as LinkIcon, Bell, Mail, CreditCard, Eye, EyeOff, Key } from 'lucide-react';
+import { Plus, Trash2, Save, Settings, Link as LinkIcon, Bell, Mail, CreditCard, Eye, EyeOff, Key, MessageCircle } from 'lucide-react';
 
 const AdminSettings = () => {
   const { API, token } = useContext(CartContext);
@@ -54,6 +54,14 @@ const AdminSettings = () => {
     frequency: 'once_per_session'
   });
 
+  // WhatsApp Support State (up to 3 buttons)
+  const emptyWhatsappButton = (id) => ({ id, label: '', number: '', message: '', enabled: false });
+  const [whatsapp, setWhatsapp] = useState({
+    enabled: true,
+    title: 'Chat with us on WhatsApp',
+    buttons: [emptyWhatsappButton('1'), emptyWhatsappButton('2'), emptyWhatsappButton('3')]
+  });
+
   // Bulk Email State
   const [bulkEmail, setBulkEmail] = useState({
     subject: '',
@@ -93,6 +101,20 @@ const AdminSettings = () => {
       } else if (activeTab === 'announcement') {
         const res = await axios.get(`${API}/admin/settings/floating-announcement`, { headers });
         if (res.data) setAnnouncement(res.data);
+      } else if (activeTab === 'whatsapp') {
+        const res = await axios.get(`${API}/admin/settings/whatsapp`, { headers });
+        if (res.data) {
+          // Always render exactly 3 button slots for a stable editor.
+          const buttons = [...(res.data.buttons || [])];
+          while (buttons.length < 3) {
+            buttons.push(emptyWhatsappButton(String(buttons.length + 1)));
+          }
+          setWhatsapp({
+            enabled: res.data.enabled !== false,
+            title: res.data.title || 'Chat with us on WhatsApp',
+            buttons: buttons.slice(0, 3)
+          });
+        }
       } else if (activeTab === 'bulk-email') {
         const res = await axios.get(`${API}/admin/settings/bulk-emails`, { headers });
         setBulkEmailHistory(res.data);
@@ -270,6 +292,43 @@ const AdminSettings = () => {
     }
   };
 
+  // WhatsApp Support Functions
+  const updateWhatsappButton = (index, field, value) => {
+    setWhatsapp((prev) => {
+      const buttons = prev.buttons.map((b, i) => (i === index ? { ...b, [field]: value } : b));
+      return { ...prev, buttons };
+    });
+  };
+
+  const saveWhatsapp = async () => {
+    try {
+      setLoading(true);
+      const headers = { Authorization: `Bearer ${token}` };
+      // Only persist buttons that have a phone number.
+      const payload = {
+        enabled: whatsapp.enabled,
+        title: whatsapp.title,
+        buttons: whatsapp.buttons
+          .filter((b) => (b.number || '').trim())
+          .map((b, i) => ({
+            id: String(i + 1),
+            label: b.label || `Support ${i + 1}`,
+            number: b.number.trim(),
+            message: b.message || '',
+            enabled: b.enabled !== false
+          }))
+      };
+      await axios.put(`${API}/admin/settings/whatsapp`, payload, { headers });
+      toast.success('WhatsApp settings saved successfully');
+      await loadData();
+    } catch (error) {
+      console.error('Failed to save WhatsApp settings:', error);
+      toast.error('Failed to save WhatsApp settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Bulk Email Functions
   const sendBulkEmail = async () => {
     if (!bulkEmail.subject || !bulkEmail.message) {
@@ -315,6 +374,7 @@ const AdminSettings = () => {
     { id: 'social', label: 'Social Links', icon: LinkIcon },
     { id: 'external', label: 'External Links', icon: LinkIcon },
     { id: 'announcement', label: 'Floating Announcement', icon: Bell },
+    { id: 'whatsapp', label: 'WhatsApp', icon: MessageCircle },
     { id: 'bulk-email', label: 'Bulk Email', icon: Mail },
     { id: 'api-keys', label: 'API Keys', icon: Settings },
   ];
@@ -675,6 +735,96 @@ const AdminSettings = () => {
             </Button>
           </CardContent>
         </Card>
+      )}
+
+      {/* WhatsApp Support Tab */}
+      {activeTab === 'whatsapp' && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <MessageCircle className="h-5 w-5 mr-2 text-green-600" />
+                WhatsApp Support Buttons (Max 3)
+              </CardTitle>
+              <p className="text-sm text-gray-500 mt-2">
+                Configure up to 3 WhatsApp assistance buttons. Enabled buttons appear in the
+                floating support widget, the footer and the order confirmation page.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={whatsapp.enabled}
+                  onCheckedChange={(checked) => setWhatsapp({ ...whatsapp, enabled: checked })}
+                />
+                <Label>Enable WhatsApp support on the storefront</Label>
+              </div>
+
+              <div>
+                <Label>Widget Title</Label>
+                <Input
+                  value={whatsapp.title}
+                  onChange={(e) => setWhatsapp({ ...whatsapp, title: e.target.value })}
+                  placeholder="Chat with us on WhatsApp"
+                />
+              </div>
+
+              {whatsapp.buttons.map((button, index) => (
+                <div key={index} className="border rounded-lg p-4 space-y-4 bg-gray-50">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold flex items-center">
+                      <MessageCircle className="h-4 w-4 mr-2 text-green-600" />
+                      Button {index + 1}
+                    </h4>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={button.enabled}
+                        onCheckedChange={(checked) => updateWhatsappButton(index, 'enabled', checked)}
+                      />
+                      <Label className="text-sm">Enabled</Label>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label>Label</Label>
+                      <Input
+                        value={button.label}
+                        onChange={(e) => updateWhatsappButton(index, 'label', e.target.value)}
+                        placeholder="e.g., Customer Support"
+                      />
+                    </div>
+                    <div>
+                      <Label>WhatsApp Number (with country code)</Label>
+                      <Input
+                        value={button.number}
+                        onChange={(e) => updateWhatsappButton(index, 'number', e.target.value)}
+                        placeholder="+12393293813"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Pre-filled Message (optional)</Label>
+                    <Textarea
+                      value={button.message}
+                      onChange={(e) => updateWhatsappButton(index, 'message', e.target.value)}
+                      placeholder="Hello Kayee01, I need assistance."
+                      rows={2}
+                    />
+                  </div>
+                </div>
+              ))}
+
+              <Button
+                onClick={saveWhatsapp}
+                className="bg-[#d4af37] hover:bg-[#b8941f]"
+                disabled={loading}
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {loading ? 'Saving...' : 'Save WhatsApp Settings'}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Bulk Email Tab */}

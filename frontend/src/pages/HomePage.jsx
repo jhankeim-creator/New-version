@@ -33,11 +33,16 @@ const HomePage = () => {
     try {
       const [productsRes, categoriesRes, bestSellersRes] = await Promise.all([
         axios.get(`${API}/products?featured=true`),
-        axios.get(`${API}/categories`),
+        axios.get(`${API}/categories/with-counts`),
         axios.get(`${API}/products/best-sellers?limit=12`)
       ]);
       setFeaturedProducts(productsRes.data.slice(0, 30));
-      setCategories(categoriesRes.data);
+      // Only show categories that actually have products (plus the umbrella collections)
+      const UMBRELLAS = ['jewelry', 'watches', 'fashion'];
+      const cats = (categoriesRes.data || []).filter(
+        (c) => c.product_count > 0 || UMBRELLAS.includes(c.slug)
+      );
+      setCategories(cats);
       
       // Ensure at least 3 best sellers are shown
       const sellers = bestSellersRes.data;

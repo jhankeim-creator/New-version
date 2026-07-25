@@ -700,6 +700,29 @@ async def get_categories():
             logger.warning(f"Skipping invalid category document {cat.get('id')}: {e}")
     return result
 
+@api_router.get("/categories/with-counts")
+async def get_categories_with_counts():
+    """Categories annotated with how many products each contains (by slug)."""
+    agg = await db.products.aggregate([
+        {"$group": {"_id": "$category", "count": {"$sum": 1}}}
+    ]).to_list(length=None)
+    counts = {d["_id"]: d["count"] for d in agg if d.get("_id")}
+    categories = await db.categories.find({}, {"_id": 0}).to_list(200)
+    result = []
+    for cat in categories:
+        parse_from_mongo(cat)
+        if not cat.get("slug") and cat.get("name"):
+            cat["slug"] = str(cat["name"]).lower().strip().replace(" ", "-")
+        result.append({
+            "id": cat.get("id"),
+            "name": cat.get("name"),
+            "slug": cat.get("slug"),
+            "image": cat.get("image", ""),
+            "description": cat.get("description", ""),
+            "product_count": counts.get(cat.get("slug"), 0),
+        })
+    return result
+
 @api_router.post("/categories", response_model=Category)
 async def create_category(category_data: CategoryCreate, admin: User = Depends(get_current_admin)):
     category = Category(**category_data.model_dump())
@@ -746,7 +769,8 @@ async def get_products(
 ):
     query = {}
     if category:
-        query["category"] = category
+        cats = [c.strip() for c in category.split(",") if c.strip()]
+        query["category"] = cats[0] if len(cats) == 1 else {"$in": cats}
     if featured is not None:
         query["featured"] = featured
     if on_sale is not None:
@@ -799,7 +823,8 @@ async def get_products_count(
 ):
     query = {}
     if category:
-        query["category"] = category
+        cats = [c.strip() for c in category.split(",") if c.strip()]
+        query["category"] = cats[0] if len(cats) == 1 else {"$in": cats}
     if featured is not None:
         query["featured"] = featured
     if on_sale is not None:

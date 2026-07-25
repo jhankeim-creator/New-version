@@ -107,51 +107,80 @@ def _clean(text: str, limit: int = 220) -> str:
     return text
 
 
-def build_article(products: List[dict], categories: List[dict]) -> dict:
-    """Assemble a weekly article dict from product data."""
+def build_article(products: List[dict], categories: List[dict], stats: dict) -> dict:
+    """Assemble a factual weekly article grounded in real catalog data."""
     now = datetime.now(timezone.utc)
     week_seed = int(now.strftime("%Y%W"))
     rng = random.Random(week_seed)
 
     title_base, _flag = _THEMES[week_seed % len(_THEMES)]
     date_label = now.strftime("%B %d, %Y")
-    title = f"{title_base} — {now.strftime('%B %d, %Y')}"
+    title = f"{title_base} — {date_label}"
+
+    cat_names = {c.get("slug"): c.get("name") for c in categories}
+
+    def catname(slug):
+        return cat_names.get(slug) or (slug or "Accessories").replace("-", " ").title()
+
+    total = stats.get("total", 0)
+    pmin = stats.get("price_min")
+    pmax = stats.get("price_max")
+    top_cats = stats.get("top_categories", [])  # [(slug, count), ...]
+    new_count = stats.get("new_count", 0)
+    sale_count = stats.get("sale_count", 0)
 
     picks = products[:6]
-    intro = rng.choice(_INTROS)
+    cover_image = next((p["images"][0] for p in picks if p.get("images")), "")
 
-    cover_image = ""
+    parts = []
+
+    # Factual intro built from real numbers
+    intro = f"Our collection currently features <strong>{total} product{'s' if total != 1 else ''}</strong>"
+    if top_cats:
+        names = ", ".join(f"{catname(s)} ({n})" for s, n in top_cats[:3])
+        intro += f" across categories such as {names}"
+    if pmin is not None and pmax is not None:
+        intro += f", with prices from <strong>${pmin:,.0f}</strong> to <strong>${pmax:,.0f}</strong>"
+    intro += ". Below are the pieces our team is spotlighting this week, with the details that matter."
+    parts.append(f"<p>{intro}</p>")
+
+    # Real product highlights
+    parts.append("<h2>This week's highlights</h2>")
     for p in picks:
-        imgs = p.get("images") or []
-        if imgs:
-            cover_image = imgs[0]
-            break
-
-    parts = [f"<p>{intro}</p>"]
-    used_leads = list(_PRODUCT_LEADS)
-    used_notes = list(_PRODUCT_NOTES)
-    rng.shuffle(used_leads)
-    rng.shuffle(used_notes)
-
-    for idx, p in enumerate(picks):
-        name = p.get("name") or "this piece"
+        name = p.get("name") or "This piece"
         price = _price(p)
-        cat = _category_label(p.get("category", ""), categories)
-        desc = _clean(p.get("description", ""), 200)
-        lead = used_leads[idx % len(used_leads)]
-        note = used_notes[idx % len(used_notes)]
-        price_txt = f" (from <strong>{price}</strong>)" if price else ""
-        parts.append(f"<h2>{name}</h2>")
-        para = f"<p>{lead} <strong>{name}</strong>{price_txt}, a highlight from our {cat} range. "
+        cat = catname(p.get("category", ""))
+        desc = _clean(p.get("description", ""), 220)
+        badges = []
+        if p.get("best_seller"):
+            badges.append("best seller")
+        if p.get("is_new"):
+            badges.append("new arrival")
+        if p.get("on_sale"):
+            badges.append("on sale")
+        meta = " · ".join([x for x in [price, cat] if x] + badges)
+        parts.append(f"<h3>{name}</h3>")
+        line = f"<p><strong>{meta}</strong>."
         if desc:
-            para += f"{desc} "
-        para += f"{note}</p>"
-        parts.append(para)
+            line += f" {desc}"
+        line += "</p>"
+        parts.append(line)
+
+    # Collection by the numbers (all factual)
+    parts.append("<h2>The collection by the numbers</h2>")
+    bullets = [f"<li><strong>{total}</strong> products available right now</li>"]
+    if new_count:
+        bullets.append(f"<li><strong>{new_count}</strong> new arrivals</li>")
+    if sale_count:
+        bullets.append(f"<li><strong>{sale_count}</strong> items currently on sale</li>")
+    for s, n in top_cats[:5]:
+        bullets.append(f"<li>{catname(s)}: <strong>{n}</strong> item{'s' if n != 1 else ''}</li>")
+    parts.append("<ul>" + "".join(bullets) + "</ul>")
 
     parts.append(f"<p>{rng.choice(_CLOSERS)}</p>")
     content_html = "\n".join(parts)
 
-    excerpt = _clean(intro, 160)
+    excerpt = _clean(re.sub(r"<[^>]+>", "", intro), 160)
     slug = f"{slugify(title_base)}-{now.strftime('%Y-%m-%d')}"
 
     return {
@@ -181,13 +210,30 @@ async def _select_products() -> List[dict]:
 
 
 async def generate_post() -> Optional[dict]:
-    products = await _select_products()
-    if not products:
+    highlights = await _select_products()
+    if not highlights:
         return None
-    categories = await db.blog_categories_cache.find({}, {"_id": 0}).to_list(100)
-    if not categories:
-        categories = await db.categories.find({}, {"_id": 0}).to_list(100)
-    post = build_article(products, categories)
+    categories = await db.categories.find({}, {"_id": 0}).to_list(200)
+
+    # Compute real catalog statistics for a factual article
+    import collections
+    all_products = await db.products.find(
+        {}, {"_id": 0, "category": 1, "price": 1, "is_new": 1, "on_sale": 1}
+    ).to_list(length=None)
+    cat_counter = collections.Counter(
+        p.get("category") for p in all_products if p.get("category")
+    )
+    prices = [p.get("price") for p in all_products if isinstance(p.get("price"), (int, float))]
+    stats = {
+        "total": len(all_products),
+        "price_min": min(prices) if prices else None,
+        "price_max": max(prices) if prices else None,
+        "top_categories": cat_counter.most_common(6),
+        "new_count": sum(1 for p in all_products if p.get("is_new")),
+        "sale_count": sum(1 for p in all_products if p.get("on_sale")),
+    }
+
+    post = build_article(highlights, categories, stats)
     await db.blog_posts.insert_one(dict(post))
     return post
 

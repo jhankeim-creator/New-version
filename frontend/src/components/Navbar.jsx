@@ -34,8 +34,13 @@ const Navbar = () => {
 
   useEffect(() => {
     let active = true;
-    axios.get(`${API}/categories`)
-      .then((res) => { if (active) setCategories(res.data || []); })
+    const UMBRELLAS = ['jewelry', 'watches', 'fashion'];
+    axios.get(`${API}/categories/with-counts`)
+      .then((res) => {
+        if (!active) return;
+        const cats = (res.data || []).filter((c) => c.product_count > 0 || UMBRELLAS.includes(c.slug));
+        setCategories(cats);
+      })
       .catch(() => {});
     return () => { active = false; };
   }, [API]);
@@ -82,9 +87,6 @@ const Navbar = () => {
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
-            <Link to="/shop?tags=topup" className="nav-link">
-              {t('nav.topup')}
-            </Link>
             <Link to="/blog" className="nav-link">
               Blog
             </Link>
@@ -217,13 +219,6 @@ const Navbar = () => {
                 </div>
               </div>
             )}
-            <Link
-              to="/shop?tags=topup"
-              className="block py-2 text-gray-700 hover:text-[#d4af37]"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              {t('nav.topup')}
-            </Link>
             <Link
               to="/blog"
               className="block py-2 text-gray-700 hover:text-[#d4af37]"

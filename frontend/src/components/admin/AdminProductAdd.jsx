@@ -21,8 +21,7 @@ const AdminProductAdd = () => {
     description: '',
     price: '',
     compare_at_price: '',
-    category_id: '',
-    subcategory_id: '',
+    category: '',
     stock: '',
     sku: '',
     meta_title: '',
@@ -48,7 +47,8 @@ const AdminProductAdd = () => {
 
   const loadCategories = async () => {
     try {
-      const response = await axios.get(`${API}/v2/categories/tree`);
+      // Use the same category system as the storefront and product editor
+      const response = await axios.get(`${API}/categories`);
       setCategories(response.data);
     } catch (error) {
       console.error('Failed to load categories:', error);
@@ -106,12 +106,23 @@ const AdminProductAdd = () => {
 
     try {
       const productData = {
-        ...formData,
+        name: formData.name,
+        description: formData.description,
         price: parseFloat(formData.price),
         compare_at_price: formData.compare_at_price ? parseFloat(formData.compare_at_price) : null,
+        category: formData.category,
         stock: parseInt(formData.stock) || 0,
+        sku: formData.sku || null,
         images: images,
-        videos: videos,
+        meta_title: formData.meta_title || null,
+        meta_description: formData.meta_description || null,
+        featured: formData.featured,
+        on_sale: formData.on_sale,
+        is_new: formData.is_new,
+        best_seller: formData.best_seller,
+        has_variants: formData.has_variants,
+        variants: formData.variants,
+        variant_options: formData.variant_options,
         tags: (() => {
           const baseTags = formData.tags.split(',').map(t => t.trim()).filter(t => t);
           if (formData.auto_topup && !baseTags.includes('topup')) baseTags.push('topup');
@@ -120,7 +131,7 @@ const AdminProductAdd = () => {
       };
 
       const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-      await axios.post(`${API}/v2/products`, productData, { headers });
+      await axios.post(`${API}/products`, productData, { headers });
       
       toast.success('Product created successfully!');
       
@@ -130,8 +141,7 @@ const AdminProductAdd = () => {
         description: '',
         price: '',
         compare_at_price: '',
-        category_id: '',
-        subcategory_id: '',
+        category: '',
         stock: '',
         sku: '',
         meta_title: '',
@@ -156,8 +166,6 @@ const AdminProductAdd = () => {
       setLoading(false);
     }
   };
-
-  const selectedCategory = categories.find(c => c.id === formData.category_id);
 
   return (
     <div className="space-y-6">
@@ -373,32 +381,16 @@ const AdminProductAdd = () => {
               <Label>Category *</Label>
               <select
                 className="w-full border rounded p-2"
-                value={formData.category_id}
-                onChange={(e) => setFormData({ ...formData, category_id: e.target.value, subcategory_id: '' })}
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                 required
               >
                 <option value="">Select Category</option>
                 {categories.map(cat => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                  <option key={cat.id} value={cat.slug}>{cat.name}</option>
                 ))}
               </select>
             </div>
-
-            {selectedCategory && selectedCategory.subcategories && selectedCategory.subcategories.length > 0 && (
-              <div>
-                <Label>Subcategory</Label>
-                <select
-                  className="w-full border rounded p-2"
-                  value={formData.subcategory_id}
-                  onChange={(e) => setFormData({ ...formData, subcategory_id: e.target.value })}
-                >
-                  <option value="">Select Subcategory</option>
-                  {selectedCategory.subcategories.map(sub => (
-                    <option key={sub.id} value={sub.id}>{sub.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
           </CardContent>
         </Card>
 

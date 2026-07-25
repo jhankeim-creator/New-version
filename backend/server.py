@@ -1778,23 +1778,32 @@ app.include_router(oauth_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(complete_router)
 
+# --- CORS configuration ---
+# If allow_credentials=True, allow_origins cannot be "*".
+_cors_configured = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
+_cors_allow_all = "*" in _cors_configured
+
+# Explicit allow-list: CORS_ORIGINS, else FRONTEND_URL, else local dev.
+_cors_allow_origins = (
+    ["*"]
+    if _cors_allow_all
+    else (_cors_configured or [os.environ.get("FRONTEND_URL", "http://localhost:3000")])
+)
+
+# Always accept Vercel deployments (prod + previews), Render sites, and localhost dev,
+# even when CORS_ORIGINS/FRONTEND_URL are not explicitly set for them. This lets the
+# hosted frontend (e.g. *.vercel.app) reach the API without extra configuration.
+_cors_allow_origin_regex = (
+    None
+    if _cors_allow_all
+    else r"https://([a-z0-9-]+\.)*(vercel\.app|onrender\.com)|http://localhost(:\d+)?"
+)
+
 app.add_middleware(
     CORSMiddleware,
-    # If allow_credentials=True, allow_origins cannot be "*".
-    # Default to a safe single-origin policy for local dev unless explicitly configured.
-    allow_origins=(
-        ["*"]
-        if "*" in [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
-        else (
-            [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
-            or [os.environ.get("FRONTEND_URL", "http://localhost:3000")]
-        )
-    ),
-    allow_credentials=(
-        False
-        if "*" in [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
-        else True
-    ),
+    allow_origins=_cors_allow_origins,
+    allow_origin_regex=_cors_allow_origin_regex,
+    allow_credentials=(False if _cors_allow_all else True),
     allow_methods=["*"],
     allow_headers=["*"],
 )

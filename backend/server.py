@@ -2102,25 +2102,33 @@ async def load_api_settings_into_env():
 
 @app.on_event("startup")
 async def ensure_admin_account():
-    """Guarantee an admin account exists so the store owner can always sign in.
+    """Guarantee an admin account exists with a known password so the store
+    owner can always sign in.
 
-    Creates the ADMIN_EMAIL_1 account with ADMIN_PASSWORD (default 'Admin123!')
-    when it is missing, and promotes it to admin if it exists as a customer.
-    Never resets the password of an existing account.
+    The admin credentials are controlled entirely from environment variables:
+    the account for ADMIN_EMAIL_1 is created if missing, always given the admin
+    role, and its password is synced to ADMIN_PASSWORD (default 'Admin123!').
+    To change the admin password, set ADMIN_PASSWORD in the host env and redeploy.
     """
     try:
         admin_email = ((os.environ.get("ADMIN_EMAIL_1") or "kayicom509@gmail.com").strip().lower())
         admin_password = os.environ.get("ADMIN_PASSWORD") or "Admin123!"
+        password_hash = hash_password(admin_password)
         existing = await db.users.find_one({"email": admin_email})
         if not existing:
             user = User(email=admin_email, name="Admin User", role="admin")
             doc = prepare_for_mongo(user.model_dump())
-            doc["password_hash"] = hash_password(admin_password)
+            doc["password_hash"] = password_hash
             await db.users.insert_one(doc)
             logger.info(f"Bootstrapped admin account for {admin_email}")
-        elif existing.get("role") != "admin":
-            await db.users.update_one({"email": admin_email}, {"$set": {"role": "admin"}})
-            logger.info(f"Promoted {admin_email} to admin")
+        else:
+            # Ensure admin role and a known password (env-controlled).
+            await db.users.update_one(
+                {"email": admin_email},
+                {"$set": {"role": "admin", "password_hash": password_hash},
+                 "$unset": {"password": ""}},
+            )
+            logger.info(f"Ensured admin role + password for {admin_email}")
     except Exception as e:
         logger.error(f"ensure_admin_account failed: {e}")
 

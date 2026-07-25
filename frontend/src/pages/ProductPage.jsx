@@ -1,6 +1,7 @@
 import { useEffect, useState, useContext } from 'react';
 import { resolveImageUrl } from '../lib/utils';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useSeo } from '../lib/seo';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
 import { Minus, Plus, ShoppingCart, Star } from 'lucide-react';
@@ -52,6 +53,12 @@ const ProductPage = () => {
     }
   };
 
+  useSeo({
+    title: product?.meta_title || product?.name,
+    description: product?.meta_description || product?.description,
+    image: product?.images?.[0] ? resolveImageUrl(product.images[0]) : undefined,
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -66,10 +73,19 @@ const ProductPage = () => {
     <div className="min-h-screen">
       <div className="pt-32 pb-20">
         <div className="container mx-auto px-4">
+          {/* Breadcrumb */}
+          <nav className="text-sm text-ink-muted mb-6">
+            <Link to="/" className="hover:text-gold-600">Home</Link>
+            <span className="mx-2">/</span>
+            <Link to={`/shop/${product.category}`} className="hover:text-gold-600 capitalize">{product.category}</Link>
+            <span className="mx-2">/</span>
+            <span className="text-ink-soft line-clamp-1">{product.name}</span>
+          </nav>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Images */}
             <div>
-              <div className="mb-4">
+              <div className="mb-4 overflow-hidden rounded-2xl bg-cream shadow-card">
                 <img
                   src={resolveImageUrl(product.images[selectedImage])}
                   alt={product.name}
@@ -84,8 +100,8 @@ const ProductPage = () => {
                       key={idx}
                       src={resolveImageUrl(img)}
                       alt={`${product.name} ${idx + 1}`}
-                      className={`w-full h-24 object-cover cursor-pointer border-2 ${
-                        selectedImage === idx ? 'border-[#d4af37]' : 'border-gray-200'
+                      className={`w-full h-24 object-cover cursor-pointer rounded-lg border-2 transition-colors ${
+                        selectedImage === idx ? 'border-gold-500' : 'border-transparent hover:border-gold-200'
                       }`}
                       onClick={() => setSelectedImage(idx)}
                     />
@@ -96,6 +112,12 @@ const ProductPage = () => {
 
             {/* Product Info */}
             <div>
+              {/* Badges */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                {product.on_sale && <span className="bg-red-600 text-white px-3 py-1 text-xs font-bold rounded-full">SALE</span>}
+                {product.is_new && <span className="bg-green-600 text-white px-3 py-1 text-xs font-bold rounded-full">NEW</span>}
+                {product.best_seller && <span className="bg-gold-500 text-white px-3 py-1 text-xs font-bold rounded-full">BEST SELLER</span>}
+              </div>
               <h1
                 className="text-4xl md:text-5xl font-bold mb-4"
                 style={{ fontFamily: 'Playfair Display' }}
@@ -103,9 +125,29 @@ const ProductPage = () => {
               >
                 {product.name}
               </h1>
-              <div className="text-3xl font-bold text-[#d4af37] mb-6" data-testid="product-price">
-                ${product.price.toFixed(2)}
+              {product.rating > 0 && (
+                <div className="flex items-center gap-1.5 mb-4">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star key={s} className={`h-4 w-4 ${s <= Math.round(product.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                  ))}
+                  <span className="text-sm text-ink-muted ml-1">
+                    {product.rating.toFixed(1)}{product.reviews_count ? ` (${product.reviews_count} reviews)` : ''}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center gap-3 mb-6" data-testid="product-price">
+                <span className={`text-3xl font-bold ${product.on_sale ? 'text-red-600' : 'text-gold-600'}`}>
+                  ${product.price.toFixed(2)}
+                </span>
+                {product.on_sale && product.compare_at_price && (
+                  <span className="text-xl text-gray-400 line-through">${product.compare_at_price.toFixed(2)}</span>
+                )}
               </div>
+              {typeof product.stock === 'number' && (
+                <p className={`mb-6 text-sm font-medium ${product.stock > 0 ? 'text-green-700' : 'text-red-600'}`}>
+                  {product.stock > 0 ? (product.stock <= 5 ? `Only ${product.stock} left in stock` : 'In stock') : 'Out of stock'}
+                </p>
+              )}
               <p className="text-gray-700 text-lg mb-6 leading-relaxed">{product.description}</p>
 
               {/* Quantity Selector */}
@@ -138,7 +180,8 @@ const ProductPage = () => {
               <div className="flex space-x-4">
                 <Button
                   onClick={handleAddToCart}
-                  className="flex-1 bg-[#d4af37] hover:bg-[#b8941f] text-white py-6 text-lg"
+                  disabled={product.stock === 0}
+                  className="flex-1 btn-gold text-white py-6 text-lg rounded-full"
                   data-testid="add-to-cart-button"
                 >
                   <ShoppingCart className="mr-2 h-5 w-5" />
@@ -149,8 +192,9 @@ const ProductPage = () => {
                     handleAddToCart();
                     navigate('/cart');
                   }}
+                  disabled={product.stock === 0}
                   variant="outline"
-                  className="flex-1 border-2 border-black hover:bg-black hover:text-white py-6 text-lg"
+                  className="flex-1 border-2 border-ink hover:bg-ink hover:text-white py-6 text-lg rounded-full"
                 >
                   Buy Now
                 </Button>

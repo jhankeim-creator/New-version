@@ -23,6 +23,8 @@ import Wishlist from './pages/Wishlist';
 import LoginPage from './pages/LoginPage';
 import AccountPage from './pages/AccountPage';
 import FAQPage from './pages/FAQPage';
+import BlogPage from './pages/BlogPage';
+import BlogPostPage from './pages/BlogPostPage';
 import TermsOfService from './pages/TermsOfService';
 import RefundPolicy from './pages/RefundPolicy';
 import WhatsAppButton from './components/WhatsAppButton';
@@ -205,6 +207,8 @@ function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/account" element={<AccountPage />} />
               <Route path="/faq" element={<FAQPage />} />
+              <Route path="/blog" element={<BlogPage />} />
+              <Route path="/blog/:slug" element={<BlogPostPage />} />
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/refund-policy" element={<RefundPolicy />} />
               <Route path="/admin/login" element={<AdminLogin />} />

@@ -1,5 +1,6 @@
 import { useEffect, useState, useContext, useRef } from 'react';
 import { resolveImageUrl } from '../lib/utils';
+import { useSeo } from '../lib/seo';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, ShoppingBag, Star, ChevronLeft, ChevronRight, Heart } from 'lucide-react';
 import { CartContext } from '../App';
@@ -16,6 +17,12 @@ const HomePage = () => {
   const [wishlistItems, setWishlistItems] = useState([]);
   const navigate = useNavigate();
   const scrollContainerRef = useRef(null);
+
+  useSeo({
+    title: 'Luxury Watches & Fashion',
+    description: 'Designer watches, curated clothing and exclusive accessories at Kayee01.',
+    path: '/',
+  });
 
   useEffect(() => {
     loadData();

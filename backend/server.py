@@ -89,6 +89,14 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class EmailCodeRequest(BaseModel):
+    email: EmailStr
+    name: Optional[str] = None
+
+class EmailCodeVerify(BaseModel):
+    email: EmailStr
+    code: str
+
 class Token(BaseModel):
     access_token: str
     token_type: str
@@ -113,6 +121,7 @@ class Product(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
+    slug: Optional[str] = None  # SEO-friendly URL slug (auto-generated from name)
     description: str
     price: float
     compare_at_price: Optional[float] = None  # Original price for sale display
@@ -379,6 +388,29 @@ async def get_current_admin(current_user: User = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
+def slugify(text: str) -> str:
+    """Create an SEO-friendly slug from arbitrary text."""
+    text = (text or "").lower().strip()
+    text = re.sub(r"[^a-z0-9\s-]", "", text)
+    text = re.sub(r"[\s_-]+", "-", text)
+    return text.strip("-")
+
+
+async def unique_product_slug(name: str, exclude_id: Optional[str] = None) -> str:
+    """Generate a product slug that is unique across the products collection."""
+    base = slugify(name) or "product"
+    slug = base
+    for _ in range(50):
+        query = {"slug": slug}
+        if exclude_id:
+            query["id"] = {"$ne": exclude_id}
+        existing = await db.products.find_one(query, {"_id": 0, "id": 1})
+        if not existing:
+            return slug
+        slug = f"{base}-{uuid.uuid4().hex[:6]}"
+    return f"{base}-{uuid.uuid4().hex[:8]}"
+
+
 def prepare_for_mongo(data: dict) -> dict:
     """Convert datetime objects to ISO strings for MongoDB storage"""
     for key, value in data.items():
@@ -450,6 +482,92 @@ async def login(credentials: UserLogin):
 @api_router.get("/auth/me", response_model=User)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@api_router.post("/auth/email/request-code")
+async def request_email_code(payload: EmailCodeRequest):
+    """Passwordless login: email the user a short-lived one-time code."""
+    import random as _random
+    code = f"{_random.randint(0, 999999):06d}"
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+
+    await db.login_codes.update_one(
+        {"email": payload.email.lower()},
+        {"$set": {
+            "email": payload.email.lower(),
+            "code": code,
+            "name": payload.name or "",
+            "expires_at": expires_at.isoformat(),
+            "attempts": 0,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }},
+        upsert=True,
+    )
+
+    subject = "Your Kayee01 sign-in code"
+    html = f"""
+    <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:auto;padding:24px;">
+      <h2 style="font-family:'Playfair Display',Georgia,serif;color:#14110f;">Sign in to Kayee01</h2>
+      <p style="color:#6b6560;">Use the code below to sign in. It expires in 10 minutes.</p>
+      <div style="font-size:34px;font-weight:700;letter-spacing:10px;color:#a9832f;
+                  background:#faf7f2;border:1px solid #ecd9a1;border-radius:12px;
+                  text-align:center;padding:18px;margin:18px 0;">{code}</div>
+      <p style="color:#9a938c;font-size:13px;">If you didn't request this, you can safely ignore this email.</p>
+    </div>
+    """
+    try:
+        await email_service.send_email(payload.email, subject, html)
+    except Exception as e:
+        logger.error(f"Failed to send login code: {e}")
+
+    # Never reveal whether the address exists / whether email actually sent
+    return {"message": "If the email is valid, a sign-in code has been sent."}
+
+
+@api_router.post("/auth/email/verify", response_model=Token)
+async def verify_email_code(payload: EmailCodeVerify):
+    """Verify the one-time code and sign the user in (creating them if new)."""
+    email = payload.email.lower()
+    record = await db.login_codes.find_one({"email": email}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=400, detail="Invalid or expired code")
+
+    try:
+        expires_at = datetime.fromisoformat(record["expires_at"])
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+    except Exception:
+        expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+    if datetime.now(timezone.utc) > expires_at:
+        await db.login_codes.delete_one({"email": email})
+        raise HTTPException(status_code=400, detail="Code has expired")
+
+    if int(record.get("attempts", 0)) >= 5:
+        await db.login_codes.delete_one({"email": email})
+        raise HTTPException(status_code=429, detail="Too many attempts, request a new code")
+
+    if payload.code.strip() != str(record.get("code")):
+        await db.login_codes.update_one({"email": email}, {"$inc": {"attempts": 1}})
+        raise HTTPException(status_code=400, detail="Invalid code")
+
+    # Code is valid - consume it
+    await db.login_codes.delete_one({"email": email})
+
+    user_doc = await db.users.find_one({"email": email}, {"_id": 0})
+    if user_doc:
+        user = User(**parse_from_mongo(user_doc))
+    else:
+        display_name = (record.get("name") or email.split("@")[0]).strip() or "Customer"
+        user = User(email=email, name=display_name, role="customer")
+        await db.users.insert_one(prepare_for_mongo(user.model_dump()))
+        try:
+            await email_service.send_welcome_email(user.email, user.name)
+        except Exception:
+            pass
+
+    access_token = create_access_token(data={"sub": user.id})
+    return Token(access_token=access_token, token_type="bearer", user=user)
 
 
 @api_router.put("/users/profile", response_model=User)
@@ -747,7 +865,11 @@ async def get_best_sellers(limit: int = 10):
 
 @api_router.get("/products/{product_id}", response_model=Product)
 async def get_product(product_id: str):
+    # Resolve by id first, then by SEO slug so both /product/<id> and
+    # /product/<slug> work.
     product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not product:
+        product = await db.products.find_one({"slug": product_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return Product(**parse_from_mongo(product))
@@ -755,6 +877,8 @@ async def get_product(product_id: str):
 @api_router.post("/products", response_model=Product)
 async def create_product(product_data: ProductCreate, admin: User = Depends(get_current_admin)):
     product = Product(**product_data.model_dump())
+    if not product.slug:
+        product.slug = await unique_product_slug(product.name)
     product_doc = prepare_for_mongo(product.model_dump())
     await db.products.insert_one(product_doc)
     return product
@@ -766,6 +890,11 @@ async def update_product(product_id: str, product_data: ProductUpdate, admin: Us
     
     if not update_data:
         raise HTTPException(status_code=400, detail="No updates provided")
+
+    # Keep an SEO slug in sync with the product name
+    existing = await db.products.find_one({"id": product_id}, {"_id": 0, "slug": 1})
+    if update_data.get("name") and not (existing or {}).get("slug"):
+        update_data["slug"] = await unique_product_slug(update_data["name"], exclude_id=product_id)
     
     result = await db.products.update_one(
         {"id": product_id},
@@ -1787,6 +1916,7 @@ from payment_routes import payment_router
 from oauth_routes import oauth_router
 from admin_routes import admin_router
 from complete_routes import complete_router
+from blog_routes import blog_router
 
 # Include routers in the main app
 app.include_router(api_router)
@@ -1794,6 +1924,84 @@ app.include_router(payment_router, prefix="/api")
 app.include_router(oauth_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(complete_router)
+app.include_router(blog_router)
+
+
+# ===== SEO: sitemap.xml & robots.txt =====
+
+def _public_base_url() -> str:
+    url = os.environ.get("FRONTEND_URL", "http://localhost:3000").strip().rstrip("/")
+    return url
+
+
+@app.get("/sitemap.xml")
+async def sitemap():
+    """Automatically generated sitemap covering static pages, categories,
+    products (by slug when available) and blog posts."""
+    base = _public_base_url()
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    urls = []
+
+    def add(loc: str, changefreq: str = "weekly", priority: str = "0.6", lastmod: str = now):
+        urls.append(
+            f"<url><loc>{base}{loc}</loc><lastmod>{lastmod}</lastmod>"
+            f"<changefreq>{changefreq}</changefreq><priority>{priority}</priority></url>"
+        )
+
+    for path, pr in [("/", "1.0"), ("/shop", "0.9"), ("/blog", "0.7"),
+                     ("/track-order", "0.4"), ("/faq", "0.3"), ("/terms", "0.2"),
+                     ("/refund-policy", "0.2")]:
+        add(path, "weekly", pr)
+
+    try:
+        categories = await db.categories.find({}, {"_id": 0, "slug": 1}).to_list(200)
+        for c in categories:
+            if c.get("slug"):
+                add(f"/shop/{c['slug']}", "weekly", "0.7")
+    except Exception:
+        pass
+
+    try:
+        products = await db.products.find({}, {"_id": 0, "id": 1, "slug": 1, "updated_at": 1}).limit(5000).to_list(5000)
+        for p in products:
+            ident = p.get("slug") or p.get("id")
+            if not ident:
+                continue
+            lm = now
+            if isinstance(p.get("updated_at"), str):
+                lm = p["updated_at"][:10]
+            add(f"/product/{ident}", "weekly", "0.8", lm)
+    except Exception:
+        pass
+
+    try:
+        posts = await db.blog_posts.find({"published": True}, {"_id": 0, "slug": 1, "created_at": 1}).limit(1000).to_list(1000)
+        for post in posts:
+            if post.get("slug"):
+                lm = post.get("created_at", now)[:10] if isinstance(post.get("created_at"), str) else now
+                add(f"/blog/{post['slug']}", "monthly", "0.6", lm)
+    except Exception:
+        pass
+
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        + "\n".join(urls)
+        + "\n</urlset>"
+    )
+    return Response(content=xml, media_type="application/xml")
+
+
+@app.get("/robots.txt")
+async def robots():
+    base = _public_base_url()
+    body = (
+        "User-agent: *\n"
+        "Allow: /\n"
+        "Disallow: /admin\n"
+        f"Sitemap: {base}/sitemap.xml\n"
+    )
+    return Response(content=body, media_type="text/plain")
 
 # --- CORS configuration ---
 # If allow_credentials=True, allow_origins cannot be "*".

@@ -337,6 +337,28 @@ class PaymentGatewayCreate(BaseModel):
     instructions: Optional[str] = None
 
 
+class ShippingMethod(BaseModel):
+    """Delivery / shipping method configurable from the admin panel"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str  # Display name (e.g. Free Delivery, FedEx Express)
+    description: Optional[str] = None  # e.g. Delivery in 7-14 business days
+    cost: float = 0.0
+    estimated_days: Optional[str] = None
+    enabled: bool = True
+    order: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ShippingMethodCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    cost: float = 0.0
+    estimated_days: Optional[str] = None
+    enabled: bool = True
+    order: int = 0
+
+
 class SocialLink(BaseModel):
     """Social media link"""
     model_config = ConfigDict(extra="ignore")

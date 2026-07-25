@@ -238,7 +238,8 @@ class Order(BaseModel):
     payment_method: str  # stripe, binance, plisio, manual
     payment_status: str = "pending"  # pending, confirmed, failed, refunded
     shipping_address: dict
-    shipping_method: Optional[str] = "free"  # free or fedex
+    shipping_method: Optional[str] = "free"  # shipping method id (or legacy "free"/"fedex")
+    shipping_method_name: Optional[str] = None  # human readable label
     shipping_cost: Optional[float] = 0.0
     phone: Optional[str] = ""
     notes: Optional[str] = None
@@ -309,6 +310,7 @@ class OrderCreate(BaseModel):
     crypto_discount: Optional[float] = 0.0
     shipping_address: dict
     shipping_method: Optional[str] = "free"
+    shipping_method_name: Optional[str] = None
     shipping_cost: Optional[float] = 0.0
     phone: Optional[str] = ""
     notes: Optional[str] = None
@@ -1510,6 +1512,7 @@ async def refund_order_to_wallet(
 
 from models import (
     PaymentGatewaySettings, PaymentGatewayCreate,
+    ShippingMethod, ShippingMethodCreate,
     SocialLink, SocialLinkCreate,
     ExternalLink, ExternalLinkCreate,
     FloatingAnnouncement, FloatingAnnouncementUpdate,
@@ -1574,6 +1577,78 @@ async def delete_payment_gateway(gateway_id: str, admin: User = Depends(get_curr
         raise HTTPException(status_code=404, detail="Payment gateway not found")
     
     return {"message": "Payment gateway deleted successfully"}
+
+# ===== SHIPPING / DELIVERY METHOD ROUTES =====
+
+def _sort_shipping_methods(methods):
+    return sorted(methods, key=lambda m: (m.get("order", 0), m.get("name", "")))
+
+@api_router.get("/admin/settings/shipping-methods")
+async def get_shipping_methods(admin: User = Depends(get_current_admin)):
+    """Get all delivery/shipping methods (admin)"""
+    settings = await db.admin_settings.find_one({"id": "admin_settings"}, {"_id": 0})
+    if not settings:
+        return []
+    return _sort_shipping_methods(settings.get("shipping_methods", []))
+
+@api_router.get("/settings/shipping-methods")
+async def get_public_shipping_methods():
+    """Get enabled delivery/shipping methods (no auth required)"""
+    settings = await db.admin_settings.find_one({"id": "admin_settings"}, {"_id": 0})
+    methods = _sort_shipping_methods((settings or {}).get("shipping_methods", []))
+    enabled = [m for m in methods if m.get("enabled", True)]
+    # Always expose at least a free delivery option so checkout never breaks.
+    if not enabled:
+        return [ShippingMethod(
+            name="Free Delivery",
+            description="Delivery in 7-14 business days",
+            cost=0.0,
+            estimated_days="7-14 business days",
+        ).model_dump()]
+    return enabled
+
+@api_router.post("/admin/settings/shipping-methods")
+async def create_shipping_method(method_data: ShippingMethodCreate, admin: User = Depends(get_current_admin)):
+    """Add a new delivery/shipping method"""
+    method = ShippingMethod(**method_data.model_dump())
+    await db.admin_settings.update_one(
+        {"id": "admin_settings"},
+        {"$push": {"shipping_methods": method.model_dump()}},
+        upsert=True
+    )
+    return method
+
+@api_router.put("/admin/settings/shipping-methods/{method_id}")
+async def update_shipping_method(method_id: str, method_data: ShippingMethodCreate, admin: User = Depends(get_current_admin)):
+    """Update an existing delivery/shipping method"""
+    settings = await db.admin_settings.find_one({"id": "admin_settings"}, {"_id": 0})
+    existing = None
+    for m in (settings or {}).get("shipping_methods", []):
+        if m.get("id") == method_id:
+            existing = m
+            break
+    if not existing:
+        raise HTTPException(status_code=404, detail="Shipping method not found")
+
+    updated = {**existing, **method_data.model_dump(), "id": method_id}
+    result = await db.admin_settings.update_one(
+        {"id": "admin_settings", "shipping_methods.id": method_id},
+        {"$set": {"shipping_methods.$": updated}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Shipping method not found")
+    return updated
+
+@api_router.delete("/admin/settings/shipping-methods/{method_id}")
+async def delete_shipping_method(method_id: str, admin: User = Depends(get_current_admin)):
+    """Delete a delivery/shipping method"""
+    result = await db.admin_settings.update_one(
+        {"id": "admin_settings"},
+        {"$pull": {"shipping_methods": {"id": method_id}}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Shipping method not found")
+    return {"message": "Shipping method deleted successfully"}
 
 # Social Links Routes
 @api_router.get("/admin/settings/social-links")

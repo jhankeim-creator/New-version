@@ -33,3 +33,11 @@ The dependency-refresh update script (backend venv + `pip install`, frontend `ya
 - Backend has `flake8`/`black` available (dev deps) but no configured project lint standard.
 - There is no automated test suite (only an empty `tests/__init__.py`); `pytest` collects 0 tests.
 - A cosmetic `error reading bcrypt version` warning appears from passlib + bcrypt 4.x during hashing; it is harmless and hashing still works.
+
+### Manual testing gotcha (browser)
+
+- During GUI testing, Chrome occasionally shows `Aw, Snap! ... Error code: 4` (a renderer-process crash, not a JS error — a real app error would show the React error overlay instead). This is browser flakiness in the VM, not a server problem. Recover by fully quitting and relaunching Chrome, then reload the same URL. Do NOT restart the dev servers for this; restarting them mid-navigation actually makes it worse.
+
+### Delivery / shipping methods
+
+- Delivery methods are admin-managed (Admin → Settings → "Delivery Methods" tab). They are stored in the `admin_settings` document under `shipping_methods` and exposed via `/api/admin/settings/shipping-methods` (CRUD, admin auth) and the public `/api/settings/shipping-methods` (enabled only; returns a default Free Delivery when none are configured so checkout never breaks). The checkout page loads these dynamically.

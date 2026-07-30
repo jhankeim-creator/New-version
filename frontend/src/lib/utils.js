@@ -38,6 +38,28 @@ const TYPE_TO_PARENT = {
   perfume: "accessories", socks: "accessories", scarf: "accessories",
 };
 
+// Priority brands that should appear first within each category, in order.
+export const PRIORITY_BRANDS = [
+  "lv", "louis vuitton", "gucci", "balenciaga", "dior", "alexander mcqueen",
+  "louboutin", "christian louboutin", "ugg", "rolex", "omega", "cartier",
+  "chanel", "hermes", "prada", "versace", "bvlgari", "audemars piguet",
+  "patek", "richard mille", "celine", "burberry", "fendi", "ysl",
+  "saint laurent", "bottega", "amiri", "tiffany",
+];
+
+export function brandRank(name) {
+  const n = (name || "").toLowerCase();
+  const i = PRIORITY_BRANDS.findIndex((b) => n.includes(b));
+  return i < 0 ? 999 : i;
+}
+
+// Preferred display order of the top ("All X") sections.
+export const PARENT_ORDER = ["clothing", "shoes", "bags", "jewelry", "watches", "accessories"];
+export function parentRank(slug) {
+  const i = PARENT_ORDER.indexOf(slug);
+  return i < 0 ? 999 : i;
+}
+
 // Resolve a category's parent ({ slug, name }). Prefers backend-provided
 // section fields; otherwise infers from the slug (e.g. "bags-lv" -> "bags",
 // "t-shirt" -> "clothing").

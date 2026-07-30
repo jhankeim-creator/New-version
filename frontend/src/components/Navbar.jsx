@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, User, Menu, X, Search, LogOut, Heart, ChevronDown } from 'lucide-react';
 import axios from 'axios';
 import { CartContext } from '../App';
-import { categoryParent } from '../lib/utils';
+import { categoryParent, brandRank, parentRank } from '../lib/utils';
 import { Button } from './ui/button';
 import Logo from './Logo';
 import SearchBar from './SearchBar';
@@ -60,10 +60,15 @@ const Navbar = () => {
             grp.brands.push({ slug: c.slug, name: c.name, count: c.product_count || 0 });
           }
         });
-        // Most popular first: sections and brands ordered by product count.
+        // Priority brands first (LV, Gucci, Rolex, ...), then by product count;
+        // sections in the preferred order.
         const grouped = Array.from(bySection.values())
-          .map((s) => ({ ...s, brands: s.brands.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)) }))
-          .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+          .map((s) => ({
+            ...s,
+            brands: s.brands.sort(
+              (a, b) => brandRank(a.name) - brandRank(b.name) || b.count - a.count || a.name.localeCompare(b.name)),
+          }))
+          .sort((a, b) => parentRank(a.slug) - parentRank(b.slug) || b.total - a.total);
         setSections(grouped);
       })
       .catch(() => {});

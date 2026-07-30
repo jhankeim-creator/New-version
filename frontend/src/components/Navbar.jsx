@@ -51,7 +51,8 @@ const Navbar = () => {
           if (!bySection.has(secSlug)) {
             bySection.set(secSlug, { slug: secSlug, name: secName, brands: [] });
           }
-          if (c.section_slug) {
+          // Only list real brand children (skip the section's own leaf entry).
+          if (c.section_slug && c.slug !== c.section_slug) {
             bySection.get(secSlug).brands.push({ slug: c.slug, name: c.name });
           }
         });

@@ -111,6 +111,8 @@ class Category(BaseModel):
     slug: str = ""
     section: str = ""          # display name of the parent section (e.g. "Bags")
     section_slug: str = ""     # slug of the parent section (e.g. "bags")
+    parent: str = ""           # parent category slug ("" for top-level sections)
+    parent_name: str = ""      # parent category display name
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class CategoryCreate(BaseModel):
@@ -725,6 +727,8 @@ async def get_categories_with_counts():
             "description": cat.get("description", ""),
             "section": cat.get("section", ""),
             "section_slug": cat.get("section_slug", ""),
+            "parent": cat.get("parent", ""),
+            "parent_name": cat.get("parent_name", ""),
             "product_count": counts.get(cat.get("slug"), 0),
         })
     return result

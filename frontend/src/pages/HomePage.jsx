@@ -1,5 +1,5 @@
 import { useEffect, useState, useContext, useRef } from 'react';
-import { resolveImageUrl } from '../lib/utils';
+import { resolveImageUrl, categoryParent } from '../lib/utils';
 import { useSeo } from '../lib/seo';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, ShoppingBag, Star, ChevronLeft, ChevronRight, Heart, Truck, ShieldCheck, Headphones, BadgeCheck } from 'lucide-react';
@@ -45,8 +45,9 @@ const HomePage = () => {
       (categoriesRes.data || [])
         .filter((c) => c.product_count > 0)
         .forEach((c) => {
-          const slug = c.section_slug || c.slug;
-          const name = c.section || c.name;
+          const parent = categoryParent(c);
+          const slug = parent.slug || c.slug;
+          const name = parent.name || c.name;
           if (!bySection.has(slug)) {
             bySection.set(slug, { id: slug, slug, name, description: '', image: c.image, total: 0 });
           }

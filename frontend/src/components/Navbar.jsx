@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, User, Menu, X, Search, LogOut, Heart, ChevronDown } from 'lucide-react';
 import axios from 'axios';
 import { CartContext } from '../App';
+import { categoryParent } from '../lib/utils';
 import { Button } from './ui/button';
 import Logo from './Logo';
 import SearchBar from './SearchBar';
@@ -46,15 +47,16 @@ const Navbar = () => {
         // section fall back to a standalone entry so nothing is hidden.
         const bySection = new Map();
         cats.forEach((c) => {
-          const secSlug = c.section_slug || c.slug;
-          const secName = c.section || c.name;
+          const parent = categoryParent(c);
+          const secSlug = parent.slug || c.slug;
+          const secName = parent.name || c.name;
           if (!bySection.has(secSlug)) {
             bySection.set(secSlug, { slug: secSlug, name: secName, brands: [], total: 0 });
           }
           const grp = bySection.get(secSlug);
           grp.total += c.product_count || 0;
           // Only list real brand children (skip the section's own leaf entry).
-          if (c.section_slug && c.slug !== c.section_slug) {
+          if (c.slug !== secSlug) {
             grp.brands.push({ slug: c.slug, name: c.name, count: c.product_count || 0 });
           }
         });

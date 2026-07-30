@@ -1,5 +1,5 @@
 import { useEffect, useState, useContext } from 'react';
-import { resolveImageUrl } from '../lib/utils';
+import { resolveImageUrl, categoryParent } from '../lib/utils';
 import { useSeo } from '../lib/seo';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { CartContext } from '../App';
@@ -53,8 +53,9 @@ const ShopPage = () => {
         if (!active) return;
         const m = {};
         (res.data || []).forEach((c) => {
-          if (c.section_slug) {
-            (m[c.section_slug] = m[c.section_slug] || []).push(c.slug);
+          const parent = categoryParent(c);
+          if (parent.slug && parent.slug !== c.slug) {
+            (m[parent.slug] = m[parent.slug] || []).push(c.slug);
           }
         });
         setSectionMap(m);

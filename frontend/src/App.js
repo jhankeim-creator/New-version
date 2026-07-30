@@ -27,6 +27,7 @@ import BlogPage from './pages/BlogPage';
 import BlogPostPage from './pages/BlogPostPage';
 import TermsOfService from './pages/TermsOfService';
 import RefundPolicy from './pages/RefundPolicy';
+import ScrollToTop from './components/ScrollToTop';
 import WhatsAppButton from './components/WhatsAppButton';
 import FloatingAnnouncement from './components/FloatingAnnouncement';
 import GoogleAnalytics from './components/GoogleAnalytics';
@@ -192,6 +193,7 @@ function App() {
       }}>
         <div className="App">
           <BrowserRouter>
+            <ScrollToTop />
             <Navbar />
             <Routes>
               <Route path="/" element={<HomePage />} />

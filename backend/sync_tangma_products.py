@@ -230,6 +230,27 @@ def size_of(title):
 _CODE_RE = re.compile(r'\b(?=[A-Za-z0-9]*[A-Za-z])(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{3,}\b')
 
 
+def clean_model(parent_title, brand):
+    """Extract a human model name from the parent album title, e.g.
+    'Rolex Day Date 0720' -> 'Day Date', 'LV Danube M14685' -> 'Danube'.
+    Returns '' when nothing descriptive remains (codes/sizes/dates only)."""
+    t = clean_title(parent_title or "")
+    brand_words = {w.lower() for w in (brand or "").split()}
+    out = []
+    for tok in t.split():
+        low = tok.lower()
+        if low in brand_words or low in _STRIP_WORDS:
+            continue
+        if _SIZE_TOKEN_RE.match(tok) or re.search(r'\d', tok):  # sizes/dims/codes
+            continue
+        if "cm" in low or "mm" in low:
+            continue
+        out.append(tok)
+    model = " ".join(out).strip()
+    # avoid single-letter / junk models
+    return model if len(model) >= 3 else ""
+
+
 def ref_code(title, fallback):
     """Pick a clean product code from the title, ignoring dimension tokens
     (e.g. '21X6X16CM') and sizes; fall back to the source id."""
@@ -355,18 +376,23 @@ def leaf_category(group, type_name, brand, parent_slug, parent_name):
     return parent_slug, parent_name, "", ""
 
 
-def build_product(item, base, group, type_name, brand, parent_slug, parent_name, noun, images):
+def build_product(item, base, group, type_name, brand, parent_slug, parent_name,
+                  noun, images, parent_title=""):
     raw_title = clean_title(item["title"])
     size = size_of(item["title"])
     leaf_slug, leaf_name, p_slug, p_name = leaf_category(
         group, type_name, brand, parent_slug, parent_name)
     disp_type = type_name or noun
 
-    # Professional, human-readable name: "<Brand> <Type> <REF>", e.g.
-    # "LV Bag M27330", "Rolex Watch 231797", "Fila T-Shirt FXTX41".
+    # Professional name: prefer "<Brand> <Model>" from the album title
+    # (e.g. "Rolex Day Date", "LV Danube"); otherwise "<Brand> <Type> <REF>".
+    model = clean_model(parent_title, brand)
     code = ref_code(item["title"], item["id"])
-    name = " ".join(w for w in [brand, noun] if w).strip()
-    name = f"{name} {code}" if code else name
+    if model:
+        name = " ".join(w for w in [brand, model] if w).strip()
+    else:
+        name = " ".join(w for w in [brand, noun] if w).strip()
+        name = f"{name} {code}" if code else name
 
     desc_bits = []
     if brand:
@@ -457,7 +483,7 @@ def crawl(seeds, since_date, limit, per_root, per_category, max_images, delay, d
                 if not images:
                     continue
                 record = build_product(it, base, group, type_name, brand, parent_slug,
-                                       parent_name, noun, images)
+                                       parent_name, noun, images, parent_title)
                 collected.append(record)
                 root_counts[root_key] = root_counts.get(root_key, 0) + 1
                 cat_counts[cat_slug] = cat_counts.get(cat_slug, 0) + 1

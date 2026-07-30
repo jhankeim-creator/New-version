@@ -1,5 +1,5 @@
 import { useEffect, useState, useContext, useRef } from 'react';
-import { resolveImageUrl, categoryParent } from '../lib/utils';
+import { resolveImageUrl, categoryParent, parentRank } from '../lib/utils';
 import { useSeo } from '../lib/seo';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, ShoppingBag, Star, ChevronLeft, ChevronRight, Heart, Truck, ShieldCheck, Headphones, BadgeCheck } from 'lucide-react';
@@ -53,8 +53,9 @@ const HomePage = () => {
           }
           bySection.get(slug).total += c.product_count || 0;
         });
-      // Most popular sections first.
-      setCategories(Array.from(bySection.values()).sort((a, b) => b.total - a.total));
+      // Preferred section order (Clothes, Shoes, Bags, Jewelry, Watches, ...).
+      setCategories(Array.from(bySection.values())
+        .sort((a, b) => parentRank(a.slug) - parentRank(b.slug) || b.total - a.total));
       
       // Ensure at least 3 best sellers are shown
       const sellers = bestSellersRes.data;

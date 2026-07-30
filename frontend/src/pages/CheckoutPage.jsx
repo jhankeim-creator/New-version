@@ -106,7 +106,7 @@ const CheckoutPage = () => {
           name: item.name,
           price: item.price,
           quantity: item.quantity,
-          image: item.images[0]
+          image: item.images?.[0] || ''
         })),
         total: finalTotal,
         coupon_code: couponApplied ? couponCode : null,
@@ -392,7 +392,7 @@ const CheckoutPage = () => {
                     <div className="space-y-3 max-h-64 overflow-y-auto">
                       {cart.map((item) => (
                         <div key={item.id} className="flex gap-3">
-                          <img src={resolveImageUrl(item.images[0])} alt={item.name} className="w-16 h-16 object-cover" />
+                          <img src={resolveImageUrl(item.images?.[0])} alt={item.name} className="w-16 h-16 object-cover" />
                           <div className="flex-1">
                             <p className="font-semibold text-sm line-clamp-1">{item.name}</p>
                             <p className="text-sm text-gray-600">Qty: {item.quantity}</p>

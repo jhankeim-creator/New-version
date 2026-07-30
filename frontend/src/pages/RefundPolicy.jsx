@@ -1,6 +1,13 @@
 import Footer from '../components/Footer';
+import { useSeo } from '../lib/seo';
 
 const RefundPolicy = () => {
+  useSeo({
+    title: 'Refund & Return Policy',
+    description:
+      'Kayee01 Refund & Return Policy: 30-day returns, quality guarantee, color/size exchanges, refund methods and timelines for jewelry, watches and accessories.',
+    keywords: ['refund policy', 'return policy', 'exchange', 'money back guarantee', 'jewelry returns'],
+  });
   return (
     <div className="min-h-screen bg-white">
       <div className="pt-32 pb-20">
@@ -8,6 +15,11 @@ const RefundPolicy = () => {
           <h1 className="text-4xl font-bold mb-8" style={{ fontFamily: 'Playfair Display' }}>
             Refund & Return Policy
           </h1>
+          <p className="text-gray-600 mb-8">
+            This policy applies to all Kayee01 orders — jewelry (necklaces, rings, bracelets,
+            earrings and brooches), watches and accessories. Please read the conditions below
+            before requesting a return or refund.
+          </p>
           
           <div className="prose prose-lg max-w-none space-y-6">
             <section>
@@ -102,9 +114,9 @@ const RefundPolicy = () => {
             </section>
 
             <section>
-              <h2 className="text-2xl font-bold mb-4">Exchanges</h2>
+              <h2 className="text-2xl font-bold mb-4">Exchanges (Color / Size / Model)</h2>
               <p className="text-gray-700 leading-relaxed">
-                If you need to exchange an item for a different size, color, or model, please contact us. Exchanges are subject to product availability. We will cover shipping costs for exchanges due to defects or errors on our part.
+                If you need to exchange an item for a different <strong>size</strong>, <strong>color</strong>, or model, please contact us within 30 days of delivery and include your order number and the option you selected at checkout. Exchanges are subject to product availability. We will cover shipping costs for exchanges due to defects or errors on our part; for change-of-preference exchanges the customer covers return shipping.
               </p>
             </section>
 
@@ -157,7 +169,7 @@ const RefundPolicy = () => {
 
             <div className="mt-6 p-6 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-600">
-                <strong>Last Updated:</strong> January 2025
+                <strong>Last Updated:</strong> July 2026
               </p>
             </div>
           </div>

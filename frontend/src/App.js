@@ -32,6 +32,7 @@ import WhatsAppButton from './components/WhatsAppButton';
 import FloatingAnnouncement from './components/FloatingAnnouncement';
 import GoogleAnalytics from './components/GoogleAnalytics';
 import { I18nProvider } from './i18n';
+import { buildCartKey } from './lib/variants';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -83,40 +84,46 @@ function App() {
     toast.success('Logged out successfully');
   };
 
-  const addToCart = (product, quantity = 1) => {
-    const existingItem = cart.find(item => item.id === product.id);
+  const addToCart = (product, quantity = 1, selectedVariants = null) => {
+    const hasVariants = selectedVariants && Object.keys(selectedVariants).length > 0;
+    const cartKey = buildCartKey(product.id, hasVariants ? selectedVariants : null);
+    const keyOf = (item) => item.cartKey || item.id;
+    const existingItem = cart.find(item => keyOf(item) === cartKey);
     let newCart;
-    
+
     if (existingItem) {
       newCart = cart.map(item =>
-        item.id === product.id
+        keyOf(item) === cartKey
           ? { ...item, quantity: item.quantity + quantity }
           : item
       );
     } else {
-      newCart = [...cart, { ...product, quantity }];
+      newCart = [
+        ...cart,
+        { ...product, quantity, cartKey, selectedVariants: hasVariants ? selectedVariants : null },
+      ];
     }
-    
+
     setCart(newCart);
     localStorage.setItem('cart', JSON.stringify(newCart));
     toast.success('Added to cart');
   };
 
-  const updateCartQuantity = (productId, quantity) => {
+  const updateCartQuantity = (cartKey, quantity) => {
     if (quantity <= 0) {
-      removeFromCart(productId);
+      removeFromCart(cartKey);
       return;
     }
-    
+
     const newCart = cart.map(item =>
-      item.id === productId ? { ...item, quantity } : item
+      (item.cartKey || item.id) === cartKey ? { ...item, quantity } : item
     );
     setCart(newCart);
     localStorage.setItem('cart', JSON.stringify(newCart));
   };
 
-  const removeFromCart = (productId) => {
-    const newCart = cart.filter(item => item.id !== productId);
+  const removeFromCart = (cartKey) => {
+    const newCart = cart.filter(item => (item.cartKey || item.id) !== cartKey);
     setCart(newCart);
     localStorage.setItem('cart', JSON.stringify(newCart));
     toast.success('Removed from cart');

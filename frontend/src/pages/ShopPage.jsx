@@ -42,7 +42,8 @@ const ShopPage = () => {
 
   useSeo({
     title: category ? `${category.charAt(0).toUpperCase()}${category.slice(1)} Collection` : 'Shop All Products',
-    description: 'Browse the full Kayee01 collection of watches, fashion and accessories.',
+    description: 'Browse the full Kayee01 collection of jewelry, watches, fashion and accessories.',
+    keywords: category ? [String(category).replace(/-/g, ' '), 'buy online', 'designer'] : ['shop', 'jewelry', 'watches', 'accessories'],
     path: location.pathname,
   });
 
@@ -119,9 +120,26 @@ const ShopPage = () => {
       });
       
       if (category) {
-        // Prefer a dynamic section -> member brands expansion; fall back to the
-        // legacy umbrella groups, then to an exact category match.
-        const members = sectionMap[category] || CATEGORY_GROUPS[category];
+        // Recursively expand a section/umbrella into its descendant leaf
+        // categories so multi-level trees work, e.g.
+        //   jewelry -> [necklace, ring, ...] -> [necklace-cartier, ...].
+        const expandMembers = (slug, depth = 0) => {
+          const direct = sectionMap[slug] || CATEGORY_GROUPS[slug];
+          if (!direct || depth > 4) return [slug];
+          const out = [];
+          direct.forEach((m) => {
+            if ((sectionMap[m] || CATEGORY_GROUPS[m]) && m !== slug) {
+              out.push(...expandMembers(m, depth + 1));
+            } else {
+              out.push(m);
+            }
+          });
+          return out;
+        };
+        const hasChildren = sectionMap[category] || CATEGORY_GROUPS[category];
+        const members = hasChildren
+          ? Array.from(new Set([...expandMembers(category), category]))
+          : null;
         params.append('category', members ? members.join(',') : category);
       }
 

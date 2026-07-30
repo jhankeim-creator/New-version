@@ -106,6 +106,7 @@ const CheckoutPage = () => {
           name: item.name,
           price: item.price,
           quantity: item.quantity,
+          variant: item.selectedVariants || null,
           image: item.images?.[0] || ''
         })),
         total: finalTotal,
@@ -391,10 +392,15 @@ const CheckoutPage = () => {
                   <CardContent className="space-y-4">
                     <div className="space-y-3 max-h-64 overflow-y-auto">
                       {cart.map((item) => (
-                        <div key={item.id} className="flex gap-3">
+                        <div key={item.cartKey || item.id} className="flex gap-3">
                           <img src={resolveImageUrl(item.images?.[0])} alt={item.name} className="w-16 h-16 object-cover" />
                           <div className="flex-1">
                             <p className="font-semibold text-sm line-clamp-1">{item.name}</p>
+                            {item.selectedVariants && Object.keys(item.selectedVariants).length > 0 && (
+                              <p className="text-xs text-gray-500">
+                                {Object.entries(item.selectedVariants).map(([n, v]) => `${n}: ${v}`).join(', ')}
+                              </p>
+                            )}
                             <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
                             <p className="text-sm font-bold text-[#d4af37]">${(item.price * item.quantity).toFixed(2)}</p>
                           </div>

@@ -67,13 +67,16 @@ CLOTHING_SEEDS = [
     ("11", "T-Shirt"), ("10", "Polo"), ("394", "Jacket"),
     ("87630", "Down Jacket"), ("58658", "Swimwear"), ("345535", "Kids"),
 ]
-# accessories: explicit sections (several source ids map to one clean section)
-ACC_SEEDS = [
-    ("43569", "Jewelry"), ("392", "Glasses"), ("391", "Glasses"),
-    ("28251", "Glasses"), ("393", "Belts"), ("383", "Watches"),
-    ("385", "Hats"), ("384", "Hats"), ("168165", "Hats"), ("386", "Hats"),
-    ("263724", "Perfume"), ("380", "Socks"), ("70206", "Socks"), ("390", "Scarf"),
+# accessories TYPE sections (Jewelry & Watches are handled separately, by brand)
+ACC_TYPE_SEEDS = [
+    ("392", "Glasses"), ("391", "Glasses"), ("28251", "Glasses"),
+    ("393", "Belts"), ("385", "Hats"), ("384", "Hats"), ("168165", "Hats"),
+    ("386", "Hats"), ("263724", "Perfume"), ("380", "Socks"),
+    ("70206", "Socks"), ("390", "Scarf"),
 ]
+# Brand-organised sections reached from a listing page (brands are sub-cats).
+JEWELRY_LIST = ("43569", "jewelry", "All Jewelry", "Jewelry")   # id, slug, parent name, noun
+WATCHES_LIST = ("383", "watches", "All Watches", "Watch")
 
 # --- regexes over the very regular yg_shop template HTML ---
 ANCHOR_RE = re.compile(r'<a\s+title="(?P<title>[^"]*)"\s+href="(?P<href>[^"]+)"\s*>(?P<body>.*?)</a>', re.S)
@@ -120,7 +123,8 @@ _ACCESSORY_WORDS = {
     "keyring", "keychain", "glasses", "glass", "belt", "belts", "scarf", "silk",
     "sock", "socks", "cap", "caps", "hat", "hats", "bucket", "watch", "watches",
     "perfume", "shoe", "shoes", "bag", "bags", "slipper", "slippers", "sneaker",
-    "sneakers", "plain", "luggage",
+    "sneakers", "plain", "luggage", "jewelry", "jewellery", "clock", "women",
+    "womens", "men", "mens", "ladies", "lady", "female", "male",
 }
 _STRIP_WORDS = _TYPE_WORDS | _ACCESSORY_WORDS
 _SIZE_TOKEN_RE = re.compile(r'^[A-Za-z0-9]{1,3}-[A-Za-z0-9]{1,4}$')
@@ -280,69 +284,86 @@ def gallery_images(html, cap):
     return urls
 
 
-def build_seeds(domains, session, delay):
-    """Return the list of root frames to crawl for the requested domains.
+def _seed(base, href, root_key, group, parent_slug, parent_name, noun,
+          type_name="", brand_hint=""):
+    return dict(base=base, href=href, root_key=root_key, group=group,
+                parent_slug=parent_slug, parent_name=parent_name, noun=noun,
+                type_name=type_name, brand_hint=brand_hint)
 
-    group='section' -> leaf category is the garment/accessory TYPE (T-Shirt,
-    Jewelry, ...) under a super parent (Clothing / Accessories); used where the
-    source spreads products across too many niche brands to make per-brand
-    categories worthwhile.
-    group='brand'   -> leaf category is the BRAND (LV, Gucci, ...) under the
-    section parent (Bags / Shoes); used where the source is organised by brand.
-    """
+
+def brand_seeds_from(base, list_href, parent_slug, parent_name, noun, session, delay):
+    """Build one brand-mode seed per sub-category found on a listing page
+    (used for bags/shoes homepages and the Jewelry/Watches section pages)."""
     seeds = []
-    if "clothing" in domains:
-        for cid, sec in CLOTHING_SEEDS:
-            seeds.append(dict(base=CLOTHING_BASE, href=f"categoryen_{cid}.html",
-                              section=sec, brand_hint="", root_key=f"clothing:{sec}",
-                              group="section", super_name="Clothing", super_slug="clothing"))
-    if "acc" in domains:
-        for cid, sec in ACC_SEEDS:
-            seeds.append(dict(base=ACC_BASE, href=f"categoryen_{cid}.html",
-                              section=sec, brand_hint="", root_key=f"acc:{sec}",
-                              group="section", super_name="Accessories", super_slug="accessories"))
-    for dom, base, sec in (("bags", BAGS_BASE, "Bags"), ("shoes", SHOES_BASE, "Shoes")):
-        if dom not in domains:
+    try:
+        html = fetch(urljoin(base, list_href), delay, session)
+    except RuntimeError as exc:
+        print(f"  ! could not load {parent_name}: {exc}", file=sys.stderr)
+        return seeds
+    for it in parse_items(html):
+        if it["kind"] != "category":
             continue
-        try:
-            html = fetch(urljoin(base, "defaulten.html"), delay, session)
-        except RuntimeError as exc:
-            print(f"  ! could not load {dom} home: {exc}", file=sys.stderr)
+        brand = clean_brand_name(it["title"])
+        if is_generic(brand):
             continue
-        for it in parse_items(html):
-            if it["kind"] != "category":
-                continue
-            brand = clean_brand_name(it["title"])
-            if is_generic(brand):
-                continue
-            seeds.append(dict(base=base, href=it["href"], section=sec,
-                              brand_hint=brand, root_key=f"{dom}:{brand.lower()}",
-                              group="brand", super_name="", super_slug=""))
+        seeds.append(_seed(base, it["href"], f"{parent_slug}:{brand.lower()}",
+                           "brand", parent_slug, parent_name, noun, brand_hint=brand))
     return seeds
 
 
-def leaf_category(section, brand, group, super_name, super_slug):
+def build_seeds(domains, session, delay):
+    """Return the root frames to crawl.
+
+    group='type'  -> leaf category is the TYPE (T-Shirt, Belt, ...) under a
+    parent (All Clothes / All Accessories). Used where products span too many
+    niche brands to make per-brand categories worthwhile.
+    group='brand' -> leaf category is the BRAND (LV, Rolex, ...) under a parent
+    (All Bags / All Shoes / All Jewelry / All Watches). Used where the source is
+    organised by brand.
+    """
+    seeds = []
+    if "clothing" in domains:
+        for cid, typ in CLOTHING_SEEDS:
+            seeds.append(_seed(CLOTHING_BASE, f"categoryen_{cid}.html", f"clothing:{typ}",
+                               "type", "clothing", "All Clothes", SECTION_NOUN.get(typ, typ),
+                               type_name=typ))
+    if "acc" in domains:
+        for cid, typ in ACC_TYPE_SEEDS:
+            seeds.append(_seed(ACC_BASE, f"categoryen_{cid}.html", f"accessories:{typ}",
+                               "type", "accessories", "All Accessories", SECTION_NOUN.get(typ, typ),
+                               type_name=typ))
+    if "bags" in domains:
+        seeds += brand_seeds_from(BAGS_BASE, "defaulten.html", "bags", "All Bags", "Bag", session, delay)
+    if "shoes" in domains:
+        seeds += brand_seeds_from(SHOES_BASE, "defaulten.html", "shoes", "All Shoes", "Shoes", session, delay)
+    if "jewelry" in domains:
+        cid, slug, pname, noun = JEWELRY_LIST
+        seeds += brand_seeds_from(ACC_BASE, f"categoryen_{cid}.html", slug, pname, noun, session, delay)
+    if "watches" in domains:
+        cid, slug, pname, noun = WATCHES_LIST
+        seeds += brand_seeds_from(ACC_BASE, f"categoryen_{cid}.html", slug, pname, noun, session, delay)
+    return seeds
+
+
+def leaf_category(group, type_name, brand, parent_slug, parent_name):
     """Compute (leaf_slug, leaf_name, parent_slug, parent_name) for a product."""
-    section_slug = slugify(section) or "misc"
-    if group == "section":
-        # leaf = the type (e.g. T-Shirt); parent = super (Clothing/Accessories)
-        return section_slug, section, super_slug, super_name
-    # group == "brand": leaf = brand (e.g. LV); parent = section (Bags/Shoes)
+    if group == "type":
+        return slugify(type_name), type_name, parent_slug, parent_name
+    # group == "brand": leaf = brand (e.g. LV) under the parent (All Bags/...)
     if brand:
-        return f"{section_slug}-{slugify(brand)}", brand, section_slug, section
-    return section_slug, section, "", ""
+        return f"{parent_slug}-{slugify(brand)}", brand, parent_slug, parent_name
+    return parent_slug, parent_name, "", ""
 
 
-def build_product(item, base, section, brand, images, group, super_name, super_slug):
+def build_product(item, base, group, type_name, brand, parent_slug, parent_name, noun, images):
     raw_title = clean_title(item["title"])
     size = size_of(item["title"])
-    leaf_slug, leaf_name, parent_slug, parent_name = leaf_category(
-        section, brand, group, super_name, super_slug)
+    leaf_slug, leaf_name, p_slug, p_name = leaf_category(
+        group, type_name, brand, parent_slug, parent_name)
+    disp_type = type_name or noun
 
     # Professional, human-readable name: "<Brand> <Type> <REF>", e.g.
-    # "LV Bag M27330", "Fila T-Shirt FXTX41" (source codes/dimensions/Chinese
-    # are kept in the description, not the title).
-    noun = SECTION_NOUN.get(section, section)
+    # "LV Bag M27330", "Rolex Watch 231797", "Fila T-Shirt FXTX41".
     code = ref_code(item["title"], item["id"])
     name = " ".join(w for w in [brand, noun] if w).strip()
     name = f"{name} {code}" if code else name
@@ -350,22 +371,22 @@ def build_product(item, base, section, brand, images, group, super_name, super_s
     desc_bits = []
     if brand:
         desc_bits.append(f"Brand: {brand}.")
-    desc_bits.append(f"Category: {section}.")
+    desc_bits.append(f"Category: {disp_type}.")
     if size:
         desc_bits.append(f"Sizes: {size}.")
     if raw_title:
         desc_bits.append(f"Reference: {raw_title}.")
 
-    tags = [t for t in {(brand or "").lower(), leaf_slug, parent_slug, "imported"} if t]
+    tags = [t for t in {(brand or "").lower(), leaf_slug, p_slug, "imported"} if t]
 
     return {
-        "name": name or f"{section} {item['id']}",
+        "name": name or f"{disp_type} {item['id']}",
         "description": " ".join(desc_bits),
         "category": leaf_slug,
         "category_name": leaf_name,
-        "parent_slug": parent_slug,
-        "parent_name": parent_name,
-        "section_name": section,
+        "parent_slug": p_slug,
+        "parent_name": p_name,
+        "section_name": disp_type,
         "brand": brand,
         "size": size,
         "images": images,
@@ -379,15 +400,15 @@ def build_product(item, base, section, brand, images, group, super_name, super_s
 def crawl(seeds, since_date, limit, per_root, per_category, max_images, delay, dry_run, session):
     collected, visited, root_counts, cat_counts = [], set(), {}, {}
     skipped_old = 0
-    stack = [(s["base"], s["href"], s["section"], s["brand_hint"], s["root_key"],
-              None, s["group"], s["super_name"], s["super_slug"])
+    stack = [(s["base"], s["href"], s["root_key"], None, s["group"], s["parent_slug"],
+              s["parent_name"], s["noun"], s["type_name"], s["brand_hint"])
              for s in reversed(seeds)]
 
     while stack:
         if limit and len(collected) >= limit:
             break
-        (base, href, section, brand_hint, root_key, parent_title,
-         group, super_name, super_slug) = stack.pop()
+        (base, href, root_key, parent_title, group, parent_slug,
+         parent_name, noun, type_name, brand_hint) = stack.pop()
         if per_root and root_counts.get(root_key, 0) >= per_root:
             continue
         key = (base, href.split("?")[0])
@@ -403,8 +424,8 @@ def crawl(seeds, since_date, limit, per_root, per_category, max_images, delay, d
 
         for it in parse_items(html):
             if it["kind"] == "category":
-                stack.append((base, it["href"], section, brand_hint, root_key,
-                              it["title"], group, super_name, super_slug))
+                stack.append((base, it["href"], root_key, it["title"], group,
+                              parent_slug, parent_name, noun, type_name, brand_hint))
             elif it["kind"] == "product":
                 if per_root and root_counts.get(root_key, 0) >= per_root:
                     continue
@@ -421,9 +442,9 @@ def crawl(seeds, since_date, limit, per_root, per_category, max_images, delay, d
                 brand = brand_hint or brand_of(it["title"]) or clean_brand_name(parent_title or "")
                 if is_generic(brand):
                     brand = ""
-                cat_slug = leaf_category(section, brand, group, super_name, super_slug)[0]
-                # Per-category cap only limits brand leaves; type leaves
-                # (clothing/acc) are bounded by --per-root-limit instead.
+                cat_slug = leaf_category(group, type_name, brand, parent_slug, parent_name)[0]
+                # Per-category cap only limits brand leaves; type leaves are
+                # bounded by --per-root-limit instead.
                 if group == "brand" and per_category and cat_counts.get(cat_slug, 0) >= per_category:
                     continue
                 try:
@@ -435,7 +456,8 @@ def crawl(seeds, since_date, limit, per_root, per_category, max_images, delay, d
                     images = [quote(it["thumb"], safe=":/?&=%")]
                 if not images:
                     continue
-                record = build_product(it, base, section, brand, images, group, super_name, super_slug)
+                record = build_product(it, base, group, type_name, brand, parent_slug,
+                                       parent_name, noun, images)
                 collected.append(record)
                 root_counts[root_key] = root_counts.get(root_key, 0) + 1
                 cat_counts[cat_slug] = cat_counts.get(cat_slug, 0) + 1
@@ -540,8 +562,8 @@ async def upsert_products(records, stock, replace=False):
 
 def parse_args(argv):
     p = argparse.ArgumentParser(description="Import tangma2088 network products into MongoDB.")
-    p.add_argument("--domains", default="clothing,bags,shoes,acc",
-                   help="Comma list of source domains to crawl: clothing,bags,shoes,acc.")
+    p.add_argument("--domains", default="clothing,bags,shoes,acc,jewelry,watches",
+                   help="Comma list of sources: clothing,bags,shoes,acc,jewelry,watches.")
     p.add_argument("--since", default="2025-12-01",
                    help="Only import products listed on/after this date (YYYY-MM-DD).")
     p.add_argument("--limit", type=int, default=0, help="Global max products (0 = none).")

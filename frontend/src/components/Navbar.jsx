@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingCart, User, Menu, X, Search, LogOut, Heart, ChevronDown } from 'lucide-react';
 import axios from 'axios';
 import { CartContext } from '../App';
+import { categoryParent } from '../lib/utils';
 import { Button } from './ui/button';
 import Logo from './Logo';
 import SearchBar from './SearchBar';
@@ -21,6 +22,7 @@ const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [sections, setSections] = useState([]);
   const navigate = useNavigate();
   const { lang, setLang, t } = useI18n();
 
@@ -34,12 +36,35 @@ const Navbar = () => {
 
   useEffect(() => {
     let active = true;
-    const UMBRELLAS = ['jewelry', 'watches', 'fashion'];
     axios.get(`${API}/categories/with-counts`)
       .then((res) => {
         if (!active) return;
-        const cats = (res.data || []).filter((c) => c.product_count > 0 || UMBRELLAS.includes(c.slug));
+        const cats = (res.data || []).filter((c) => c.product_count > 0);
         setCategories(cats);
+
+        // Group brand categories under their section, e.g.
+        // Bags -> [LV, Gucci], Shoes -> [Nike, ...]. Categories without a
+        // section fall back to a standalone entry so nothing is hidden.
+        const bySection = new Map();
+        cats.forEach((c) => {
+          const parent = categoryParent(c);
+          const secSlug = parent.slug || c.slug;
+          const secName = parent.name || c.name;
+          if (!bySection.has(secSlug)) {
+            bySection.set(secSlug, { slug: secSlug, name: secName, brands: [], total: 0 });
+          }
+          const grp = bySection.get(secSlug);
+          grp.total += c.product_count || 0;
+          // Only list real brand children (skip the section's own leaf entry).
+          if (c.slug !== secSlug) {
+            grp.brands.push({ slug: c.slug, name: c.name, count: c.product_count || 0 });
+          }
+        });
+        // Most popular first: sections and brands ordered by product count.
+        const grouped = Array.from(bySection.values())
+          .map((s) => ({ ...s, brands: s.brands.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)) }))
+          .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+        setSections(grouped);
       })
       .catch(() => {});
     return () => { active = false; };
@@ -71,18 +96,33 @@ const Navbar = () => {
             <Link to="/shop" className="nav-link">
               {t('nav.shopAll')}
             </Link>
-            {categories.length > 0 && (
+            {sections.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="nav-link inline-flex items-center gap-1 bg-transparent border-0 cursor-pointer">
                     Categories <ChevronDown className="h-4 w-4" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="max-h-[70vh] overflow-y-auto w-56">
-                  {categories.map((cat) => (
-                    <DropdownMenuItem key={cat.id} onClick={() => navigate(`/shop/${cat.slug}`)}>
-                      {cat.name}
-                    </DropdownMenuItem>
+                <DropdownMenuContent align="start" className="max-h-[70vh] overflow-y-auto w-64">
+                  {sections.map((sec) => (
+                    <div key={sec.slug}>
+                      <DropdownMenuLabel
+                        className="cursor-pointer hover:text-[#d4af37]"
+                        onClick={() => navigate(`/shop/${sec.slug}`)}
+                      >
+                        {sec.name}
+                      </DropdownMenuLabel>
+                      {sec.brands.map((b) => (
+                        <DropdownMenuItem
+                          key={b.slug}
+                          className="pl-5 text-sm"
+                          onClick={() => navigate(`/shop/${b.slug}`)}
+                        >
+                          {b.name}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                    </div>
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -202,19 +242,30 @@ const Navbar = () => {
             >
               {t('nav.shopAll')}
             </Link>
-            {categories.length > 0 && (
+            {sections.length > 0 && (
               <div className="py-1">
                 <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Categories</p>
-                <div className="max-h-52 overflow-y-auto pl-2 border-l border-gold-100">
-                  {categories.map((cat) => (
-                    <Link
-                      key={cat.id}
-                      to={`/shop/${cat.slug}`}
-                      className="block py-1.5 text-gray-700 hover:text-[#d4af37]"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      {cat.name}
-                    </Link>
+                <div className="max-h-64 overflow-y-auto pl-2 border-l border-gold-100">
+                  {sections.map((sec) => (
+                    <div key={sec.slug} className="mb-1">
+                      <Link
+                        to={`/shop/${sec.slug}`}
+                        className="block py-1.5 font-semibold text-gray-800 hover:text-[#d4af37]"
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        {sec.name}
+                      </Link>
+                      {sec.brands.map((b) => (
+                        <Link
+                          key={b.slug}
+                          to={`/shop/${b.slug}`}
+                          className="block py-1 pl-3 text-sm text-gray-600 hover:text-[#d4af37]"
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          {b.name}
+                        </Link>
+                      ))}
+                    </div>
                   ))}
                 </div>
               </div>

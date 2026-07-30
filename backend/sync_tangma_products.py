@@ -1,55 +1,46 @@
 """
-Import products from the tangma2088.com wholesale photo-album catalog into the
-Kayee01 MongoDB `products` collection, preserving the site's classification.
+Import products from the tangma2088.com wholesale photo-album network into the
+Kayee01 MongoDB, preserving the site's SECTION -> BRAND -> product structure.
 
-WHAT IT DOES
-------------
-The source site (https://m.tangma2088.com) is organised as:
+SOURCE NETWORK (all share the same "yg_shop" template)
+------------------------------------------------------
+  * m.tangma2088.com     -> clothing, organised by TYPE (T-Shirt, Polo, ...)
+  * mbags.tangma2088.com -> bags, top categories are BRANDS
+  * mshoes.tangma2088.com-> shoes, top categories are BRANDS
+  * macc.tangma2088.com  -> accessories: Jewelry, Glasses, Belts, Watches,
+                            Hats, Perfume, Socks, Scarf
 
-    category (categoryen_<id>.html)   e.g. "T Shirt" -> "Amiri T Shirt"
-      -> product  (producten_<id>_0.html)   one design, e.g. "Amiri S-XXL syt134"
-          -> photo (productinfoen_<id>.html) individual gallery images
+Every product page carries a real listing date (``<div class="list-time">``),
+a brand + size range + code in its title, and belongs to a section. It has NO
+price.
 
-Each product carries a real listing date (``<div class="list-time">YYYY-MM-DD``),
-a brand + size range + reference code in its title (e.g. "Amiri S-XXL syt134"),
-and a category (from the breadcrumb). It does NOT carry a price.
+TAXONOMY WE PRODUCT
+-------------------
+Each imported product is classified as SECTION -> BRAND, mirroring the source:
 
-This importer walks the category tree, keeps only products whose listing date is
-on/after a cutoff (default 2025-12-01, i.e. "end of 2025 onward"), and upserts a
-product document per design with:
+  * ``section``      -> e.g. "Bags", "Shoes", "Jewelry", "T-Shirt"
+  * ``brand``        -> e.g. "LV", "Gucci", "Amiri"
+  * ``category``     -> slug "<section>-<brand>" (e.g. "bags-lv"); when no brand
+                        can be determined it falls back to the section slug.
 
-  * name         -> cleaned title (brand + size + code, Chinese words translated)
-  * category     -> slug of the parent category (a Category doc is upserted too)
-  * images       -> full-size gallery image URLs (hot-linked, like the existing
-                    qiqiyg images already used by this project)
-  * description  -> brand / size / reference, so nothing is lost
-  * price        -> 0  (set manually later in Admin; NEVER overwritten on re-runs)
-  * source_site / source_id / source_url -> for idempotent re-imports
+A Category document is upserted per ``category`` slug carrying its ``section`` /
+``section_slug`` so the storefront can group brands under their section.
+The generic "Fashion" clothing bucket is intentionally skipped.
 
 USAGE
 -----
-Dry run (no DB, just crawl + report) -- safe, needs only `requests`:
+Dry run (no DB, just crawl + report):
 
-    python sync_tangma_products.py --categories 881 --limit 5 --dry-run
+    python sync_tangma_products.py --domains bags --per-root-limit 5 --dry-run
 
-Real import (needs MONGO_URL + DB_NAME, run from the backend venv):
+Full replacement (delete existing catalog first, prices start at 0):
 
-    export MONGO_URL="mongodb://127.0.0.1:27017" DB_NAME="kayee01_db"
-    python sync_tangma_products.py --categories 11,10,394 --since 2025-12-01
+    export MONGO_URL="..." DB_NAME="kayee01_db"
+    python sync_tangma_products.py --domains clothing,bags,shoes,acc \
+        --since 2025-12-01 --per-root-limit 25 --replace
 
-Full catalog replacement (delete every existing product + category first, then
-import only the recent items; prices start at 0 for you to set manually):
-
-    python sync_tangma_products.py \
-        --categories 11,10,394,87630,170,58658,345535 \
-        --since 2025-12-01 --replace
-
-Notes:
-  * ``--categories`` are numeric category ids from the site (see the homepage).
-    Common clothing roots: 11=T-Shirt, 10=Polo, 394=Jacket, 87630=Down,
-    170=Fashion, 58658=Swimwear, 345535=Kids.
-  * Prices are left at 0 on first insert and are never changed afterwards, so you
-    can safely re-run to pick up new arrivals without losing your pricing.
+Prices are seeded to 0 once and never overwritten, so manual pricing survives
+re-runs (idempotent by source_id).
 """
 
 import argparse
@@ -57,25 +48,44 @@ import re
 import sys
 import time
 import uuid
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone
 from urllib.parse import quote, urljoin
 
 import requests
 
-BASE = "https://m.tangma2088.com/"
 UA = ("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
       "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1")
+
+# --- source domains + how each is organised ---
+CLOTHING_BASE = "https://m.tangma2088.com/"
+ACC_BASE = "https://macc.tangma2088.com/"
+BAGS_BASE = "https://mbags.tangma2088.com/"
+SHOES_BASE = "https://mshoes.tangma2088.com/"
+
+# clothing: explicit type sections (Fashion / cat 170 deliberately excluded)
+CLOTHING_SEEDS = [
+    ("11", "T-Shirt"), ("10", "Polo"), ("394", "Jacket"),
+    ("87630", "Down Jacket"), ("58658", "Swimwear"), ("345535", "Kids"),
+]
+# accessories TYPE sections (Jewelry & Watches are handled separately, by brand)
+ACC_TYPE_SEEDS = [
+    ("392", "Glasses"), ("391", "Glasses"), ("28251", "Glasses"),
+    ("393", "Belts"), ("385", "Hats"), ("384", "Hats"), ("168165", "Hats"),
+    ("386", "Hats"), ("263724", "Perfume"), ("380", "Socks"),
+    ("70206", "Socks"), ("390", "Scarf"),
+]
+# Brand-organised sections reached from a listing page (brands are sub-cats).
+JEWELRY_LIST = ("43569", "jewelry", "All Jewelry", "Jewelry")   # id, slug, parent name, noun
+WATCHES_LIST = ("383", "watches", "All Watches", "Watch")
 
 # --- regexes over the very regular yg_shop template HTML ---
 ANCHOR_RE = re.compile(r'<a\s+title="(?P<title>[^"]*)"\s+href="(?P<href>[^"]+)"\s*>(?P<body>.*?)</a>', re.S)
 LISTTIME_RE = re.compile(r'class="list-time">\s*([0-9]{4}-[0-9]{2}-[0-9]{2})')
 IMG_SRC_RE = re.compile(r'<img[^>]*\ssrc="([^"]+)"', re.S)
 PRODUCT_IMG_RE = re.compile(r'src="([^"]*upfile/product/[^"]+)"')
-
 CATEGORY_HREF_RE = re.compile(r'^category(?:en)?_(\d+)\.html')
 PRODUCT_HREF_RE = re.compile(r'^producten?_(\d+)_0\.html')
 
-# Chinese -> English clean-ups for names / categories.
 ZH_MAP = {
     "短袖": "Short Sleeve", "短T": "T-Shirt", "短翻领": "Polo", "翻领": "Polo",
     "风衣": "Trench Coat", "外套夹克": "Jacket", "外套": "Coat", "夹克": "Jacket",
@@ -86,14 +96,6 @@ ZH_MAP = {
     "T恤": "T-Shirt",
 }
 
-# Trailing "MMDD" / "MM-DD天" style date tags the site appends to titles.
-TRAILING_DATE_RE = re.compile(r'\s+\d{3,4}(?:[A-Za-z]+)?$')
-TRAILING_RANGE_RE = re.compile(r'\s+\d+\s*[-~]\s*\d+\s*天$')
-
-# Garment types used to build a clean "brand + type" category, so per-batch code
-# noise in album titles (e.g. "Amiri T Shirt 12y") does not create junk
-# categories. Order matters: the first match wins. Values are the normalised
-# category label; several source phrases map to the same label.
 TYPE_KEYWORDS = [
     ("baseball jacket", "Jacket"), ("down jacket", "Down Jacket"),
     ("trench coat", "Coat"), ("short sleeve", "T-Shirt"), ("t-shirt", "T-Shirt"),
@@ -104,29 +106,45 @@ TYPE_KEYWORDS = [
     ("skirt", "Skirt"), ("vest", "Vest"), ("yoga", "Yoga"), ("kids", "Kids"),
     ("shirt", "Shirt"),
 ]
-
-
-def detect_type(text: str) -> str:
-    low = clean_text(text).lower()
-    for needle, label in TYPE_KEYWORDS:
-        if needle in low:
-            return label
-    return ""
-
-
-# Known top-level source category ids -> garment type, so the type is carried
-# down the whole crawl even when individual album/product titles omit it.
-SEED_TYPE = {
-    "11": "T-Shirt", "10": "Polo", "394": "Jacket", "87630": "Down Jacket",
-    "170": "Fashion", "58658": "Swimwear", "345535": "Kids",
+# Singular noun used to build a professional product name per section.
+SECTION_NOUN = {
+    "Bags": "Bag", "Shoes": "Shoes", "Jewelry": "Jewelry", "Glasses": "Glasses",
+    "Belts": "Belt", "Watches": "Watch", "Hats": "Hat", "Perfume": "Perfume",
+    "Socks": "Socks", "Scarf": "Scarf", "T-Shirt": "T-Shirt", "Polo": "Polo",
+    "Jacket": "Jacket", "Down Jacket": "Down Jacket", "Swimwear": "Swimwear",
+    "Kids": "Kids Set", "Coat": "Coat", "Hoodie": "Hoodie", "Sweater": "Sweater",
+    "Denim": "Denim", "Shorts": "Shorts", "Pants": "Pants", "Dress": "Dress",
 }
 
 _TYPE_WORDS = {w for needle, _ in TYPE_KEYWORDS for w in needle.replace("-", " ").split()}
+# Accessory / product-type words to strip out of a brand so we get "YSL" not
+# "YSL belt", "Zegna" not "Zegna Glasses", "Loewe" not "Loewe keyring", etc.
+_ACCESSORY_WORDS = {
+    "keyring", "keychain", "glasses", "glass", "belt", "belts", "scarf", "silk",
+    "sock", "socks", "cap", "caps", "hat", "hats", "bucket", "watch", "watches",
+    "perfume", "shoe", "shoes", "bag", "bags", "slipper", "slippers", "sneaker",
+    "sneakers", "plain", "luggage", "jewelry", "jewellery", "clock", "women",
+    "womens", "men", "mens", "ladies", "lady", "female", "male",
+}
+_STRIP_WORDS = _TYPE_WORDS | _ACCESSORY_WORDS
 _SIZE_TOKEN_RE = re.compile(r'^[A-Za-z0-9]{1,3}-[A-Za-z0-9]{1,4}$')
 
+# Generic (non-brand) category names to skip on bags/shoes brand listings.
+GENERIC_NAMES = {
+    "new", "arrival", "new arrival", "factory", "factory b", "factory c",
+    "hot", "recommend", "more", "original", "luggage all", "all",
+    "other", "others", "photos", "photo",
+}
+# Words to strip when turning a top-category title into a clean brand name.
+_BRAND_STRIP = re.compile(
+    r'\b(20\d{2}|1:1|original|factory|new|arrival|hot|recommend|kid|kids|2026|2025)\b',
+    re.I,
+)
+TRAILING_DATE_RE = re.compile(r'\s+\d{3,4}(?:[A-Za-z]+)?$')
+TRAILING_RANGE_RE = re.compile(r'\s+\d+\s*[-~]\s*\d+\s*天$')
 
-def fetch(url: str, delay: float, session: requests.Session, retries: int = 3) -> str:
-    """GET a page and decode the gb2312 (mixed) markup, with light retries."""
+
+def fetch(url, delay, session, retries=3):
     last_err = None
     for attempt in range(retries):
         try:
@@ -134,53 +152,103 @@ def fetch(url: str, delay: float, session: requests.Session, retries: int = 3) -
             resp.raise_for_status()
             time.sleep(delay)
             return resp.content.decode("gb2312", errors="replace")
-        except Exception as exc:  # noqa: BLE001 - network best-effort
+        except Exception as exc:  # noqa: BLE001
             last_err = exc
             time.sleep(min(2 ** attempt, 8))
     raise RuntimeError(f"Failed to fetch {url}: {last_err}")
 
 
-def clean_text(text: str) -> str:
-    """Translate common Chinese tokens and collapse whitespace."""
-    text = text.strip()
+def clean_text(text):
+    text = (text or "").strip()
     for zh, en in ZH_MAP.items():
         text = text.replace(zh, f" {en} " if en else " ")
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
+    return re.sub(r'\s+', ' ', text).strip()
 
 
-def clean_title(title: str) -> str:
-    title = TRAILING_RANGE_RE.sub('', title)
+def clean_title(title):
+    title = TRAILING_RANGE_RE.sub('', title or "")
     title = TRAILING_DATE_RE.sub('', title)
     return clean_text(title)
 
 
-def slugify(text: str) -> str:
+def slugify(text):
     text = clean_text(text).lower()
     text = re.sub(r'[^a-z0-9]+', '-', text)
-    return re.sub(r'-{2,}', '-', text).strip('-') or "misc"
+    return re.sub(r'-{2,}', '-', text).strip('-')
 
 
-def brand_of(title: str) -> str:
-    """Best-effort brand = leading words before any size range / batch code,
-    with garment-type words removed (e.g. "Amiri M-7XL 12yn01" -> "Amiri",
-    "Satoshi Nakamoto M-2XL cztx" -> "Satoshi Nakamoto", "M-2XL cztx" -> "")."""
+def clean_brand_name(name):
+    """Turn a category/album title into a clean brand, e.g. '2026 LV Original'
+    -> 'LV', 'Gucci 2026 0729' -> 'Gucci', 'Kid shoes' -> '' (generic)."""
+    t = clean_title(name)
+    t = _BRAND_STRIP.sub(' ', t)
+    tokens = [w for w in t.split() if w.lower() not in _STRIP_WORDS]
+    return re.sub(r'\s+', ' ', " ".join(tokens)).strip()
+
+
+def is_generic(name):
+    """True for names that are not real brands (generic buckets, codes, single
+    letters), so they collapse to a section-only category."""
+    b = clean_text(name).lower()
+    if not b or b in GENERIC_NAMES:
+        return True
+    if len(b) < 2:
+        return True
+    if re.fullmatch(r'[a-z]\d*', b):        # "b", "c0730"
+        return True
+    if re.fullmatch(r'[\d\W]+', b):          # pure numbers / punctuation
+        return True
+    return False
+
+
+def detect_type(text):
+    low = clean_text(text).lower()
+    for needle, label in TYPE_KEYWORDS:
+        if needle in low:
+            return label
+    return ""
+
+
+def brand_of(title):
+    """Brand = leading words before a size range / batch code, type words removed."""
     out = []
     for tok in clean_title(title).split():
         if _SIZE_TOKEN_RE.match(tok) or re.search(r'\d', tok):
             break
         out.append(tok)
-    out = [w for w in out if w.lower() not in _TYPE_WORDS]
+    out = [w for w in out if w.lower() not in _STRIP_WORDS]
     return " ".join(out).strip()
 
 
-def size_of(title: str) -> str:
-    m = re.search(r'\b([A-Z0-9]{1,3}-[A-Z0-9]{1,4})\b', title)
+def size_of(title):
+    m = re.search(r'\b([A-Z0-9]{1,3}-[A-Z0-9]{1,4})\b', title or "")
     return m.group(1) if m else ""
 
 
-def parse_items(html: str):
-    """Yield dicts for each anchor: kind, id, title, href, date, thumb."""
+# Product code = an alphanumeric token containing BOTH a letter and a digit
+# (e.g. "8ylr3283", "M27330", "cztx7155"), used to build a clean, unique name.
+_CODE_RE = re.compile(r'\b(?=[A-Za-z0-9]*[A-Za-z])(?=[A-Za-z0-9]*\d)[A-Za-z0-9]{3,}\b')
+
+
+def ref_code(title, fallback):
+    """Pick a clean product code from the title, ignoring dimension tokens
+    (e.g. '21X6X16CM') and sizes; fall back to the source id."""
+    cands = []
+    for c in _CODE_RE.findall(clean_title(title)):
+        cl = c.lower()
+        if "cm" in cl or "mm" in cl:            # dimensions like 21x6x16cm
+            continue
+        if re.fullmatch(r'\d+x[\dx.]*', cl):    # 20x30, 20x30x10
+            continue
+        if re.fullmatch(r'\d?x{0,2}l|xl|xxl|xxxl', cl):  # sizes 3XL/XXL/XL
+            continue
+        cands.append(c)
+    if not cands:
+        return fallback[:12].upper()
+    return max(cands, key=len)[:12].upper()  # longest looks most like a real code
+
+
+def parse_items(html):
     for m in ANCHOR_RE.finditer(html):
         title = m.group("title")
         href = m.group("href").strip()
@@ -189,8 +257,8 @@ def parse_items(html: str):
             continue
         date_m = LISTTIME_RE.search(body)
         img_m = IMG_SRC_RE.search(body)
-        cat_m = CATEGORY_HREF_RE.match(href)
         prod_m = PRODUCT_HREF_RE.match(href)
+        cat_m = CATEGORY_HREF_RE.match(href)
         if prod_m:
             kind, sid = "product", prod_m.group(1)
         elif cat_m:
@@ -198,20 +266,15 @@ def parse_items(html: str):
         else:
             continue
         yield {
-            "kind": kind,
-            "id": sid,
-            "title": title,
-            "href": href,
+            "kind": kind, "id": sid, "title": title, "href": href,
             "date": date_m.group(1) if date_m else None,
             "thumb": img_m.group(1) if img_m else None,
         }
 
 
-def gallery_images(html: str, cap: int) -> list:
-    """Full-size product images from a producten_ detail page, URL-encoded."""
+def gallery_images(html, cap):
     urls, seen = [], set()
     for raw in PRODUCT_IMG_RE.findall(html):
-        # encode spaces / special chars in the path while keeping the scheme+host
         enc = quote(raw, safe=":/?&=%")
         if enc not in seen:
             seen.add(enc)
@@ -221,83 +284,151 @@ def gallery_images(html: str, cap: int) -> list:
     return urls
 
 
-def build_product(item, parent_title, images, root_type=""):
-    title = clean_title(item["title"])
-    brand = brand_of(item["title"])
-    size = size_of(item["title"])
+def _seed(base, href, root_key, group, parent_slug, parent_name, noun,
+          type_name="", brand_hint=""):
+    return dict(base=base, href=href, root_key=root_key, group=group,
+                parent_slug=parent_slug, parent_name=parent_name, noun=noun,
+                type_name=type_name, brand_hint=brand_hint)
 
-    # Classify as "Brand + Type" (e.g. "Amiri T-Shirt"). The garment type is
-    # taken from the root category the crawl started at (most reliable), then
-    # falls back to the product/parent titles. This keeps the site's
-    # classification while dropping per-batch code noise from album titles.
-    gtype = root_type or detect_type(item["title"]) or detect_type(parent_title or "")
-    parts = [p for p in (brand, gtype) if p]
-    if parts:
-        category_name = " ".join(parts)
-    elif parent_title:
-        category_name = clean_title(parent_title)
-    else:
-        category_name = "Imported"
-    category_slug = slugify(category_name)
+
+def brand_seeds_from(base, list_href, parent_slug, parent_name, noun, session, delay):
+    """Build one brand-mode seed per sub-category found on a listing page
+    (used for bags/shoes homepages and the Jewelry/Watches section pages)."""
+    seeds = []
+    try:
+        html = fetch(urljoin(base, list_href), delay, session)
+    except RuntimeError as exc:
+        print(f"  ! could not load {parent_name}: {exc}", file=sys.stderr)
+        return seeds
+    for it in parse_items(html):
+        if it["kind"] != "category":
+            continue
+        brand = clean_brand_name(it["title"])
+        if is_generic(brand):
+            continue
+        seeds.append(_seed(base, it["href"], f"{parent_slug}:{brand.lower()}",
+                           "brand", parent_slug, parent_name, noun, brand_hint=brand))
+    return seeds
+
+
+def build_seeds(domains, session, delay):
+    """Return the root frames to crawl.
+
+    group='type'  -> leaf category is the TYPE (T-Shirt, Belt, ...) under a
+    parent (All Clothes / All Accessories). Used where products span too many
+    niche brands to make per-brand categories worthwhile.
+    group='brand' -> leaf category is the BRAND (LV, Rolex, ...) under a parent
+    (All Bags / All Shoes / All Jewelry / All Watches). Used where the source is
+    organised by brand.
+    """
+    seeds = []
+    if "clothing" in domains:
+        for cid, typ in CLOTHING_SEEDS:
+            seeds.append(_seed(CLOTHING_BASE, f"categoryen_{cid}.html", f"clothing:{typ}",
+                               "type", "clothing", "All Clothes", SECTION_NOUN.get(typ, typ),
+                               type_name=typ))
+    if "acc" in domains:
+        for cid, typ in ACC_TYPE_SEEDS:
+            seeds.append(_seed(ACC_BASE, f"categoryen_{cid}.html", f"accessories:{typ}",
+                               "type", "accessories", "All Accessories", SECTION_NOUN.get(typ, typ),
+                               type_name=typ))
+    if "bags" in domains:
+        seeds += brand_seeds_from(BAGS_BASE, "defaulten.html", "bags", "All Bags", "Bag", session, delay)
+    if "shoes" in domains:
+        seeds += brand_seeds_from(SHOES_BASE, "defaulten.html", "shoes", "All Shoes", "Shoes", session, delay)
+    if "jewelry" in domains:
+        cid, slug, pname, noun = JEWELRY_LIST
+        seeds += brand_seeds_from(ACC_BASE, f"categoryen_{cid}.html", slug, pname, noun, session, delay)
+    if "watches" in domains:
+        cid, slug, pname, noun = WATCHES_LIST
+        seeds += brand_seeds_from(ACC_BASE, f"categoryen_{cid}.html", slug, pname, noun, session, delay)
+    return seeds
+
+
+def leaf_category(group, type_name, brand, parent_slug, parent_name):
+    """Compute (leaf_slug, leaf_name, parent_slug, parent_name) for a product."""
+    if group == "type":
+        return slugify(type_name), type_name, parent_slug, parent_name
+    # group == "brand": leaf = brand (e.g. LV) under the parent (All Bags/...)
+    if brand:
+        return f"{parent_slug}-{slugify(brand)}", brand, parent_slug, parent_name
+    return parent_slug, parent_name, "", ""
+
+
+def build_product(item, base, group, type_name, brand, parent_slug, parent_name, noun, images):
+    raw_title = clean_title(item["title"])
+    size = size_of(item["title"])
+    leaf_slug, leaf_name, p_slug, p_name = leaf_category(
+        group, type_name, brand, parent_slug, parent_name)
+    disp_type = type_name or noun
+
+    # Professional, human-readable name: "<Brand> <Type> <REF>", e.g.
+    # "LV Bag M27330", "Rolex Watch 231797", "Fila T-Shirt FXTX41".
+    code = ref_code(item["title"], item["id"])
+    name = " ".join(w for w in [brand, noun] if w).strip()
+    name = f"{name} {code}" if code else name
 
     desc_bits = []
     if brand:
         desc_bits.append(f"Brand: {brand}.")
+    desc_bits.append(f"Category: {disp_type}.")
     if size:
         desc_bits.append(f"Sizes: {size}.")
-    desc_bits.append(f"Reference: {title}.")
-    description = " ".join(desc_bits)
+    if raw_title:
+        desc_bits.append(f"Reference: {raw_title}.")
 
-    tags = [t for t in {brand.lower(), category_slug, "imported"} if t]
+    tags = [t for t in {(brand or "").lower(), leaf_slug, p_slug, "imported"} if t]
 
     return {
-        "name": title or f"Product {item['id']}",
-        "description": description,
-        "category": category_slug,
-        "category_name": category_name,
-        "images": images,
-        "size": size,
+        "name": name or f"{disp_type} {item['id']}",
+        "description": " ".join(desc_bits),
+        "category": leaf_slug,
+        "category_name": leaf_name,
+        "parent_slug": p_slug,
+        "parent_name": p_name,
+        "section_name": disp_type,
         "brand": brand,
+        "size": size,
+        "images": images,
         "tags": tags,
         "date": item["date"],
         "source_id": item["id"],
-        "source_url": urljoin(BASE, item["href"]),
+        "source_url": urljoin(base, item["href"]),
     }
 
 
-def crawl(seed_category_ids, since_date, limit, max_images, delay, dry_run, session,
-          type_override=""):
-    """Depth-first crawl of the category tree, collecting product records."""
-    collected = []
-    visited_categories = set()
+def crawl(seeds, since_date, limit, per_root, per_category, max_images, delay, dry_run, session):
+    collected, visited, root_counts, cat_counts = [], set(), {}, {}
     skipped_old = 0
-    stack = []
-    for cid in reversed(seed_category_ids):
-        root_type = type_override or SEED_TYPE.get(cid, "")
-        stack.append((f"categoryen_{cid}.html", None, root_type))
+    stack = [(s["base"], s["href"], s["root_key"], None, s["group"], s["parent_slug"],
+              s["parent_name"], s["noun"], s["type_name"], s["brand_hint"])
+             for s in reversed(seeds)]
 
     while stack:
         if limit and len(collected) >= limit:
             break
-        href, parent_title, root_type = stack.pop()
-        cat_id_m = CATEGORY_HREF_RE.match(href)
-        cat_key = cat_id_m.group(1) if cat_id_m else href
-        if cat_key in visited_categories:
+        (base, href, root_key, parent_title, group, parent_slug,
+         parent_name, noun, type_name, brand_hint) = stack.pop()
+        if per_root and root_counts.get(root_key, 0) >= per_root:
             continue
-        visited_categories.add(cat_key)
+        key = (base, href.split("?")[0])
+        if key in visited:
+            continue
+        visited.add(key)
 
-        url = urljoin(BASE, href)
         try:
-            html = fetch(url, delay, session)
+            html = fetch(urljoin(base, href), delay, session)
         except RuntimeError as exc:
-            print(f"  ! skip {url}: {exc}", file=sys.stderr)
+            print(f"  ! skip {href}: {exc}", file=sys.stderr)
             continue
 
         for it in parse_items(html):
             if it["kind"] == "category":
-                # push subcategory; its parent title is this page's category name
-                stack.append((it["href"], it["title"], root_type))
+                stack.append((base, it["href"], root_key, it["title"], group,
+                              parent_slug, parent_name, noun, type_name, brand_hint))
             elif it["kind"] == "product":
+                if per_root and root_counts.get(root_key, 0) >= per_root:
+                    continue
                 if since_date and it["date"]:
                     try:
                         d = datetime.strptime(it["date"], "%Y-%m-%d").date()
@@ -306,104 +437,121 @@ def crawl(seed_category_ids, since_date, limit, max_images, delay, dry_run, sess
                     if d and d < since_date:
                         skipped_old += 1
                         continue
-                # Fetch the product detail page for the full gallery
-                detail_url = urljoin(BASE, it["href"])
+                # Resolve brand + leaf category first so a full category is
+                # skipped BEFORE we spend a request fetching its gallery.
+                brand = brand_hint or brand_of(it["title"]) or clean_brand_name(parent_title or "")
+                if is_generic(brand):
+                    brand = ""
+                cat_slug = leaf_category(group, type_name, brand, parent_slug, parent_name)[0]
+                # Per-category cap only limits brand leaves; type leaves are
+                # bounded by --per-root-limit instead.
+                if group == "brand" and per_category and cat_counts.get(cat_slug, 0) >= per_category:
+                    continue
                 try:
-                    detail_html = fetch(detail_url, delay, session)
-                    images = gallery_images(detail_html, max_images)
+                    images = gallery_images(fetch(urljoin(base, it["href"]), delay, session), max_images)
                 except RuntimeError as exc:
-                    print(f"  ! skip product {detail_url}: {exc}", file=sys.stderr)
+                    print(f"  ! skip product {it['href']}: {exc}", file=sys.stderr)
                     images = []
                 if not images and it.get("thumb"):
                     images = [quote(it["thumb"], safe=":/?&=%")]
                 if not images:
                     continue
-                record = build_product(it, parent_title, images, root_type)
+                record = build_product(it, base, group, type_name, brand, parent_slug,
+                                       parent_name, noun, images)
                 collected.append(record)
+                root_counts[root_key] = root_counts.get(root_key, 0) + 1
+                cat_counts[cat_slug] = cat_counts.get(cat_slug, 0) + 1
                 if dry_run:
                     print(f"  [{len(collected):>4}] {record['date'] or '????-??-??'} "
-                          f"| {record['category']:<22} | {len(images):>2} imgs | {record['name']}")
+                          f"| {record['category']:<26} | {len(images):>2} imgs | {record['name']}")
                 if limit and len(collected) >= limit:
                     break
     return collected, skipped_old
 
 
 async def upsert_products(records, stock, replace=False):
-    """Idempotently upsert products + their categories into MongoDB.
-
-    When ``replace`` is True, the entire existing ``products`` and
-    ``categories`` collections are deleted first, so the catalog is fully
-    replaced by the imported items (prices start at 0 for manual pricing).
-    """
     import os
     from motor.motor_asyncio import AsyncIOMotorClient
 
     mongo_url = os.environ.get("MONGO_URL")
     db_name = os.environ.get("DB_NAME")
     if not mongo_url or not db_name:
-        raise SystemExit("MONGO_URL and DB_NAME must be set for a real import "
-                         "(export them, or run with --dry-run).")
+        raise SystemExit("MONGO_URL and DB_NAME must be set (or use --dry-run).")
 
     client = AsyncIOMotorClient(mongo_url)
     db = client[db_name]
 
     if replace:
-        del_products = (await db.products.delete_many({})).deleted_count
-        del_categories = (await db.categories.delete_many({})).deleted_count
-        print(f"Replace mode: deleted {del_products} existing products "
-              f"and {del_categories} categories.")
+        dp = (await db.products.delete_many({})).deleted_count
+        dc = (await db.categories.delete_many({})).deleted_count
+        print(f"Replace mode: deleted {dp} products and {dc} categories.")
 
     now = datetime.now(timezone.utc).isoformat()
     inserted = updated = 0
-    categories_seen = {}
+    categories_seen = set()
+    parents_seen = set()
 
     for rec in records:
-        # Ensure the category document exists (upsert by slug)
+        parent_slug = rec["parent_slug"]
+        parent_name = rec["parent_name"]
+        # Ensure the PARENT category exists (top-level, no parent of its own).
+        if parent_slug and parent_slug not in parents_seen:
+            parents_seen.add(parent_slug)
+            await db.categories.update_one(
+                {"slug": parent_slug},
+                {"$set": {"name": parent_name, "section": parent_name,
+                          "section_slug": parent_slug, "parent": "", "parent_name": ""},
+                 "$setOnInsert": {
+                    "id": str(uuid.uuid4()), "slug": parent_slug,
+                    "description": f"{parent_name} collection",
+                    "image": rec["images"][0] if rec["images"] else "", "created_at": now}},
+                upsert=True,
+            )
         slug = rec["category"]
         if slug not in categories_seen:
-            categories_seen[slug] = rec
+            categories_seen.add(slug)
+            # section/section_slug mirror the parent so the storefront groups
+            # leaf categories under their parent without extra changes.
             await db.categories.update_one(
                 {"slug": slug},
-                {"$setOnInsert": {
-                    "id": str(uuid.uuid4()),
+                {"$set": {
                     "name": rec["category_name"],
+                    "section": parent_name,
+                    "section_slug": parent_slug,
+                    "parent": parent_slug,
+                    "parent_name": parent_name,
+                 },
+                 "$setOnInsert": {
+                    "id": str(uuid.uuid4()),
                     "slug": slug,
-                    "description": f"{rec['category_name']} imported from source catalog",
+                    "description": f"{rec['category_name']} - {parent_name}" if parent_name else rec["category_name"],
                     "image": rec["images"][0] if rec["images"] else "",
                     "created_at": now,
-                }},
+                 }},
                 upsert=True,
             )
 
         set_fields = {
-            "name": rec["name"],
-            "description": rec["description"],
-            "category": slug,
-            "images": rec["images"],
-            "tags": rec["tags"],
-            "is_new": True,
-            "source_site": "tangma2088",
-            "source_url": rec["source_url"],
+            "name": rec["name"], "description": rec["description"],
+            "category": slug, "section": rec["parent_slug"],
+            "section_name": rec["parent_name"], "type_name": rec["section_name"],
+            "brand": rec["brand"],
+            "images": rec["images"], "tags": rec["tags"], "is_new": True,
+            "source_site": "tangma2088", "source_url": rec["source_url"],
             "updated_at": now,
         }
-        # price/stock/slug are seeded once and never overwritten (so manual
-        # pricing and any later edits survive re-imports). The slug is made
-        # unique by appending the stable source id.
         set_on_insert = {
             "id": str(uuid.uuid4()),
-            "slug": f"{slugify(rec['name'])}-{rec['source_id']}",
-            "price": 0.0,
-            "stock": stock,
-            "featured": False,
-            "on_sale": False,
+            "slug": f"{slugify(rec['name']) or 'product'}-{rec['source_id']}",
+            "price": 0.0, "stock": stock, "featured": False, "on_sale": False,
             "created_at": now,
         }
-        result = await db.products.update_one(
+        res = await db.products.update_one(
             {"source_site": "tangma2088", "source_id": rec["source_id"]},
             {"$set": set_fields, "$setOnInsert": set_on_insert},
             upsert=True,
         )
-        if result.upserted_id is not None:
+        if res.upserted_id is not None:
             inserted += 1
         else:
             updated += 1
@@ -413,33 +561,28 @@ async def upsert_products(records, stock, replace=False):
 
 
 def parse_args(argv):
-    p = argparse.ArgumentParser(description="Import tangma2088 products into MongoDB.")
-    p.add_argument("--categories", default="11",
-                   help="Comma-separated source category ids to crawl (default: 11=T-Shirt).")
+    p = argparse.ArgumentParser(description="Import tangma2088 network products into MongoDB.")
+    p.add_argument("--domains", default="clothing,bags,shoes,acc,jewelry,watches",
+                   help="Comma list of sources: clothing,bags,shoes,acc,jewelry,watches.")
     p.add_argument("--since", default="2025-12-01",
                    help="Only import products listed on/after this date (YYYY-MM-DD).")
-    p.add_argument("--limit", type=int, default=0,
-                   help="Max products to import (0 = no limit).")
-    p.add_argument("--max-images", type=int, default=8,
-                   help="Max gallery images to keep per product (0 = all).")
-    p.add_argument("--delay", type=float, default=0.4,
-                   help="Delay in seconds between requests (be polite).")
-    p.add_argument("--stock", type=int, default=10,
-                   help="Initial stock for newly inserted products.")
-    p.add_argument("--type", default="",
-                   help="Force a garment type label for all seeds (e.g. 'Jacket'). "
-                        "Overrides the built-in root-category type map.")
-    p.add_argument("--dry-run", action="store_true",
-                   help="Crawl and report only; do not touch MongoDB.")
+    p.add_argument("--limit", type=int, default=0, help="Global max products (0 = none).")
+    p.add_argument("--per-root-limit", type=int, default=0,
+                   help="Max products per root seed (brand or section) (0 = none).")
+    p.add_argument("--per-category-limit", type=int, default=30,
+                   help="Max products per leaf category (section-brand) (0 = none).")
+    p.add_argument("--max-images", type=int, default=6, help="Max images/product (0 = all).")
+    p.add_argument("--delay", type=float, default=0.3, help="Delay between requests (s).")
+    p.add_argument("--stock", type=int, default=10, help="Initial stock for new products.")
+    p.add_argument("--dry-run", action="store_true", help="Crawl + report only; no DB writes.")
     p.add_argument("--replace", action="store_true",
-                   help="DELETE all existing products and categories first, then "
-                        "import (full catalog replacement). Prices start at 0.")
+                   help="DELETE all products + categories first, then import.")
     return p.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
-    seed_ids = [c.strip() for c in args.categories.split(",") if c.strip()]
+    domains = [d.strip() for d in args.domains.split(",") if d.strip()]
     since_date = None
     if args.since:
         try:
@@ -447,23 +590,26 @@ def main(argv=None):
         except ValueError:
             raise SystemExit(f"--since must be YYYY-MM-DD, got {args.since!r}")
 
-    print("=" * 80)
-    print("tangma2088 -> Kayee01 product import")
-    print(f"  categories : {seed_ids}")
-    print(f"  since      : {since_date} (products older than this are skipped)")
-    print(f"  limit      : {args.limit or 'none'} | max images/product: {args.max_images or 'all'}")
     mode = "DRY RUN (no DB writes)" if args.dry_run else "IMPORT"
     if args.replace:
         mode += " + REPLACE (wipes existing products & categories)"
-    print(f"  mode       : {mode}")
+    print("=" * 80)
+    print("tangma2088 network -> Kayee01 product import")
+    print(f"  domains        : {domains}")
+    print(f"  since          : {since_date}")
+    print(f"  per-category   : {args.per_category_limit or 'none'} | per-root: {args.per_root_limit or 'none'} | global: {args.limit or 'none'}")
+    print(f"  mode           : {mode}")
     print("=" * 80)
 
     session = requests.Session()
-    session.headers.update({"User-Agent": UA, "Referer": BASE})
+    session.headers.update({"User-Agent": UA})
+
+    seeds = build_seeds(domains, session, args.delay)
+    print(f"Discovered {len(seeds)} root categories to crawl.")
 
     records, skipped_old = crawl(
-        seed_ids, since_date, args.limit, args.max_images, args.delay, args.dry_run, session,
-        type_override=args.type,
+        seeds, since_date, args.limit, args.per_root_limit, args.per_category_limit,
+        args.max_images, args.delay, args.dry_run, session,
     )
 
     print("-" * 80)
@@ -471,19 +617,20 @@ def main(argv=None):
     print(f"Skipped (too old)  : {skipped_old}")
 
     if args.dry_run:
+        secs = {}
+        for r in records:
+            secs[r["section_name"]] = secs.get(r["section_name"], 0) + 1
+        print("By section:", ", ".join(f"{k}={v}" for k, v in sorted(secs.items())))
         cats = sorted({r["category"] for r in records})
-        print(f"Distinct categories: {len(cats)} -> {', '.join(cats[:20])}"
-              f"{' ...' if len(cats) > 20 else ''}")
+        print(f"Distinct categories: {len(cats)}")
         if args.replace:
             print("REPLACE mode: a real run would DELETE all existing products "
-                  "and categories, then insert the products listed above.")
+                  "and categories, then insert the products above.")
         print("Dry run complete - no database changes were made.")
         return
 
     if not records:
-        # Guard: never wipe the catalog if the crawl produced nothing.
-        print("Nothing to import (crawl returned 0 products); leaving the "
-              "database untouched.")
+        print("Nothing to import (crawl returned 0 products); DB left untouched.")
         return
 
     import asyncio

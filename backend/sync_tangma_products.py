@@ -37,6 +37,13 @@ Real import (needs MONGO_URL + DB_NAME, run from the backend venv):
     export MONGO_URL="mongodb://127.0.0.1:27017" DB_NAME="kayee01_db"
     python sync_tangma_products.py --categories 11,10,394 --since 2025-12-01
 
+Full catalog replacement (delete every existing product + category first, then
+import only the recent items; prices start at 0 for you to set manually):
+
+    python sync_tangma_products.py \
+        --categories 11,10,394,87630,170,58658,345535 \
+        --since 2025-12-01 --replace
+
 Notes:
   * ``--categories`` are numeric category ids from the site (see the homepage).
     Common clothing roots: 11=T-Shirt, 10=Polo, 394=Jacket, 87630=Down,
@@ -321,8 +328,13 @@ def crawl(seed_category_ids, since_date, limit, max_images, delay, dry_run, sess
     return collected, skipped_old
 
 
-async def upsert_products(records, stock, session_info):
-    """Idempotently upsert products + their categories into MongoDB."""
+async def upsert_products(records, stock, replace=False):
+    """Idempotently upsert products + their categories into MongoDB.
+
+    When ``replace`` is True, the entire existing ``products`` and
+    ``categories`` collections are deleted first, so the catalog is fully
+    replaced by the imported items (prices start at 0 for manual pricing).
+    """
     import os
     from motor.motor_asyncio import AsyncIOMotorClient
 
@@ -334,6 +346,12 @@ async def upsert_products(records, stock, session_info):
 
     client = AsyncIOMotorClient(mongo_url)
     db = client[db_name]
+
+    if replace:
+        del_products = (await db.products.delete_many({})).deleted_count
+        del_categories = (await db.categories.delete_many({})).deleted_count
+        print(f"Replace mode: deleted {del_products} existing products "
+              f"and {del_categories} categories.")
 
     now = datetime.now(timezone.utc).isoformat()
     inserted = updated = 0
@@ -413,6 +431,9 @@ def parse_args(argv):
                         "Overrides the built-in root-category type map.")
     p.add_argument("--dry-run", action="store_true",
                    help="Crawl and report only; do not touch MongoDB.")
+    p.add_argument("--replace", action="store_true",
+                   help="DELETE all existing products and categories first, then "
+                        "import (full catalog replacement). Prices start at 0.")
     return p.parse_args(argv)
 
 
@@ -431,7 +452,10 @@ def main(argv=None):
     print(f"  categories : {seed_ids}")
     print(f"  since      : {since_date} (products older than this are skipped)")
     print(f"  limit      : {args.limit or 'none'} | max images/product: {args.max_images or 'all'}")
-    print(f"  mode       : {'DRY RUN (no DB writes)' if args.dry_run else 'IMPORT'}")
+    mode = "DRY RUN (no DB writes)" if args.dry_run else "IMPORT"
+    if args.replace:
+        mode += " + REPLACE (wipes existing products & categories)"
+    print(f"  mode       : {mode}")
     print("=" * 80)
 
     session = requests.Session()
@@ -450,15 +474,21 @@ def main(argv=None):
         cats = sorted({r["category"] for r in records})
         print(f"Distinct categories: {len(cats)} -> {', '.join(cats[:20])}"
               f"{' ...' if len(cats) > 20 else ''}")
+        if args.replace:
+            print("REPLACE mode: a real run would DELETE all existing products "
+                  "and categories, then insert the products listed above.")
         print("Dry run complete - no database changes were made.")
         return
 
     if not records:
-        print("Nothing to import.")
+        # Guard: never wipe the catalog if the crawl produced nothing.
+        print("Nothing to import (crawl returned 0 products); leaving the "
+              "database untouched.")
         return
 
     import asyncio
-    inserted, updated, ncats = asyncio.run(upsert_products(records, args.stock, session))
+    inserted, updated, ncats = asyncio.run(
+        upsert_products(records, args.stock, replace=args.replace))
     print(f"Inserted new       : {inserted}")
     print(f"Updated existing   : {updated}")
     print(f"Categories ensured : {ncats}")

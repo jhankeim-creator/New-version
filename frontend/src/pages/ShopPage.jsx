@@ -13,10 +13,11 @@ import { Heart } from 'lucide-react';
 // Umbrella collections map a friendly slug to the brand/type categories that
 // belong to it, so pages like /shop/jewelry aggregate related products instead
 // of being empty (the catalog is organised by brand).
+// Legacy umbrella slugs kept for backward-compatible links. Section browsing is
+// now driven dynamically from each category's `section_slug` (see sectionMap).
 const CATEGORY_GROUPS = {
   jewelry: ['jewelry', 'necklace', 'bracelet', 'earring', 'ring', 'cartier', 'bvlgari', 'chanel', 'dior'],
   watches: ['watches', 'other-watche', 'rolex', 'omega', 'audemars-piguet', 'richard-mille', 'cartier', 'bvlgari', 'bell-&-ross', 'antoine-preziuso'],
-  fashion: ['fashion', 'lv', 'lv-shoes', 'gucci', 'jacket', 'belt', 'polo-short', 'balenciaga', 'armani', 'burberry', 'alexander-mcqueen', 'balmain', 'berluti', 'shoes', 'bags', 'glasses', 'perfume'],
 };
 
 const ShopPage = () => {
@@ -35,6 +36,10 @@ const ShopPage = () => {
   const [priceRange, setPriceRange] = useState({ min: 0, max: 10000 });
   const [sortBy, setSortBy] = useState('featured'); // featured, price_asc, price_desc, newest
 
+  // Maps a section slug (e.g. "bags") to its member brand category slugs
+  // (e.g. ["bags-lv", "bags-gucci"]), so /shop/<section> aggregates all brands.
+  const [sectionMap, setSectionMap] = useState({});
+
   useSeo({
     title: category ? `${category.charAt(0).toUpperCase()}${category.slice(1)} Collection` : 'Shop All Products',
     description: 'Browse the full Kayee01 collection of watches, fashion and accessories.',
@@ -42,9 +47,26 @@ const ShopPage = () => {
   });
 
   useEffect(() => {
+    let active = true;
+    axios.get(`${API}/categories/with-counts`)
+      .then((res) => {
+        if (!active) return;
+        const m = {};
+        (res.data || []).forEach((c) => {
+          if (c.section_slug) {
+            (m[c.section_slug] = m[c.section_slug] || []).push(c.slug);
+          }
+        });
+        setSectionMap(m);
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [API]);
+
+  useEffect(() => {
     setPage(1);
     loadProducts(1);
-  }, [category, priceRange, sortBy]);
+  }, [category, priceRange, sortBy, sectionMap]);
 
   useEffect(() => {
     if (page > 1) {
@@ -96,8 +118,10 @@ const ShopPage = () => {
       });
       
       if (category) {
-        const group = CATEGORY_GROUPS[category];
-        params.append('category', group ? group.join(',') : category);
+        // Prefer a dynamic section -> member brands expansion; fall back to the
+        // legacy umbrella groups, then to an exact category match.
+        const members = sectionMap[category] || CATEGORY_GROUPS[category];
+        params.append('category', members ? members.join(',') : category);
       }
 
       if (tags) {
@@ -142,14 +166,14 @@ const ShopPage = () => {
 
   const getTitle = () => {
     if (!category) return 'All Products';
-    if (CATEGORY_GROUPS[category]) {
-      return `${category.charAt(0).toUpperCase()}${category.slice(1)} Collection`;
-    }
-    // Title-case a brand/type slug, e.g. "lv-shoes" -> "Lv Shoes"
-    return category
+    const titleCased = category
       .split('-')
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(' ');
+    if (sectionMap[category] || CATEGORY_GROUPS[category]) {
+      return `${titleCased} Collection`;
+    }
+    return titleCased;
   };
 
   return (

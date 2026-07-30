@@ -37,12 +37,21 @@ const HomePage = () => {
         axios.get(`${API}/products/best-sellers?limit=12`)
       ]);
       setFeaturedProducts(productsRes.data.slice(0, 30));
-      // Only show categories that actually have products (plus the umbrella collections)
-      const UMBRELLAS = ['jewelry', 'watches', 'fashion'];
-      const cats = (categoriesRes.data || []).filter(
-        (c) => c.product_count > 0 || UMBRELLAS.includes(c.slug)
-      );
-      setCategories(cats);
+      // Show one card per SECTION (e.g. Bags, Shoes, Jewelry, T-Shirt) rather
+      // than every brand, so the homepage stays clean. Sections are derived
+      // from the categories' section_slug; categories without a section fall
+      // back to themselves.
+      const bySection = new Map();
+      (categoriesRes.data || [])
+        .filter((c) => c.product_count > 0)
+        .forEach((c) => {
+          const slug = c.section_slug || c.slug;
+          const name = c.section || c.name;
+          if (!bySection.has(slug)) {
+            bySection.set(slug, { id: slug, slug, name, description: '', image: c.image });
+          }
+        });
+      setCategories(Array.from(bySection.values()));
       
       // Ensure at least 3 best sellers are shown
       const sellers = bestSellersRes.data;

@@ -49,16 +49,19 @@ const Navbar = () => {
           const secSlug = c.section_slug || c.slug;
           const secName = c.section || c.name;
           if (!bySection.has(secSlug)) {
-            bySection.set(secSlug, { slug: secSlug, name: secName, brands: [] });
+            bySection.set(secSlug, { slug: secSlug, name: secName, brands: [], total: 0 });
           }
+          const grp = bySection.get(secSlug);
+          grp.total += c.product_count || 0;
           // Only list real brand children (skip the section's own leaf entry).
           if (c.section_slug && c.slug !== c.section_slug) {
-            bySection.get(secSlug).brands.push({ slug: c.slug, name: c.name });
+            grp.brands.push({ slug: c.slug, name: c.name, count: c.product_count || 0 });
           }
         });
+        // Most popular first: sections and brands ordered by product count.
         const grouped = Array.from(bySection.values())
-          .map((s) => ({ ...s, brands: s.brands.sort((a, b) => a.name.localeCompare(b.name)) }))
-          .sort((a, b) => a.name.localeCompare(b.name));
+          .map((s) => ({ ...s, brands: s.brands.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)) }))
+          .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
         setSections(grouped);
       })
       .catch(() => {});

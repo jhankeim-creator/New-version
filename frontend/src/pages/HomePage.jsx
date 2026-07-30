@@ -48,10 +48,12 @@ const HomePage = () => {
           const slug = c.section_slug || c.slug;
           const name = c.section || c.name;
           if (!bySection.has(slug)) {
-            bySection.set(slug, { id: slug, slug, name, description: '', image: c.image });
+            bySection.set(slug, { id: slug, slug, name, description: '', image: c.image, total: 0 });
           }
+          bySection.get(slug).total += c.product_count || 0;
         });
-      setCategories(Array.from(bySection.values()));
+      // Most popular sections first.
+      setCategories(Array.from(bySection.values()).sort((a, b) => b.total - a.total));
       
       // Ensure at least 3 best sellers are shown
       const sellers = bestSellersRes.data;

@@ -1,12 +1,13 @@
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState, useContext, useMemo } from 'react';
 import { resolveImageUrl } from '../lib/utils';
 import { useSeo } from '../lib/seo';
+import { productKeywords } from '../lib/seo';
+import { getProductVariantGroups } from '../lib/variants';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
-import { Minus, Plus, ShoppingCart, Star } from 'lucide-react';
+import { Minus, Plus, ShoppingCart } from 'lucide-react';
 import Footer from '../components/Footer';
-import ReviewSystem from '../components/ReviewSystem';
 import axios from 'axios';
 import { toast } from 'sonner';
 
@@ -14,15 +15,14 @@ const ProductPage = () => {
   const { id } = useParams();
   const { API, addToCart } = useContext(CartContext);
   const [product, setProduct] = useState(null);
-  const [reviews, setReviews] = useState([]);
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [selectedVariants, setSelectedVariants] = useState({});
   const navigate = useNavigate();
 
   useEffect(() => {
     loadProduct();
-    loadReviews();
   }, [id]);
 
   const loadProduct = async () => {
@@ -38,25 +38,24 @@ const ProductPage = () => {
     }
   };
 
-  const loadReviews = async () => {
-    try {
-      const response = await axios.get(`${API}/v2/reviews/product/${id}`);
-      setReviews(response.data);
-    } catch (error) {
-      console.error('Failed to load reviews:', error);
-    }
-  };
+  const variantGroups = useMemo(() => getProductVariantGroups(product), [product]);
 
   const handleAddToCart = () => {
-    if (product && quantity > 0) {
-      addToCart(product, quantity);
+    if (!product || quantity <= 0) return;
+    // Require a choice for every variant axis before adding to cart.
+    const missing = variantGroups.find((g) => !selectedVariants[g.name]);
+    if (missing) {
+      toast.error(`Please select a ${missing.name.toLowerCase()}`);
+      return;
     }
+    addToCart(product, quantity, variantGroups.length ? selectedVariants : null);
   };
 
   useSeo({
     title: product?.meta_title || product?.name,
     description: product?.meta_description || product?.description,
     image: product?.images?.[0] ? resolveImageUrl(product.images[0]) : undefined,
+    keywords: productKeywords(product),
   });
 
   if (loading) {
@@ -125,16 +124,6 @@ const ProductPage = () => {
               >
                 {product.name}
               </h1>
-              {product.rating > 0 && (
-                <div className="flex items-center gap-1.5 mb-4">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <Star key={s} className={`h-4 w-4 ${s <= Math.round(product.rating) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
-                  ))}
-                  <span className="text-sm text-ink-muted ml-1">
-                    {product.rating.toFixed(1)}{product.reviews_count ? ` (${product.reviews_count} reviews)` : ''}
-                  </span>
-                </div>
-              )}
               <div className="flex items-center gap-3 mb-6" data-testid="product-price">
                 <span className={`text-3xl font-bold ${product.on_sale ? 'text-red-600' : 'text-gold-600'}`}>
                   ${product.price.toFixed(2)}
@@ -164,6 +153,40 @@ const ProductPage = () => {
                   </div>
                 </div>
               )}
+
+              {/* Variant Selectors (color, size, ... parsed from description) */}
+              {variantGroups.map((group) => (
+                <div className="mb-6" key={group.name} data-testid={`variant-${group.name}`}>
+                  <label className="block text-sm font-semibold mb-2">
+                    {group.name}
+                    {selectedVariants[group.name] && (
+                      <span className="ml-2 font-normal text-ink-muted">: {selectedVariants[group.name]}</span>
+                    )}
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {group.values.map((value) => {
+                      const active = selectedVariants[group.name] === value;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() =>
+                            setSelectedVariants((prev) => ({ ...prev, [group.name]: value }))
+                          }
+                          className={`px-4 py-2 rounded-full border text-sm transition-colors ${
+                            active
+                              ? 'border-gold-500 bg-gold-500 text-white'
+                              : 'border-gray-300 hover:border-gold-400'
+                          }`}
+                          data-testid={`variant-option-${group.name}-${value}`}
+                        >
+                          {value}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
 
               {/* Quantity Selector */}
               <div className="mb-6">
@@ -224,15 +247,6 @@ const ProductPage = () => {
               </div>
             </div>
           </div>
-        </div>
-        
-        {/* Reviews Section */}
-        <div className="container mx-auto px-4 py-12">
-          <ReviewSystem
-            productId={id}
-            reviews={reviews}
-            onReviewSubmitted={loadReviews}
-          />
         </div>
       </div>
       <Footer />

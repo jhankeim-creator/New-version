@@ -50,9 +50,11 @@ const CartPage = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Cart Items */}
             <div className="lg:col-span-2 space-y-4">
-              {cart.map((item) => (
+              {cart.map((item) => {
+                const key = item.cartKey || item.id;
+                return (
                 <div
-                  key={item.id}
+                  key={key}
                   className="bg-white border rounded-lg p-4 flex gap-4"
                   data-testid={`cart-item-${item.id}`}
                 >
@@ -63,13 +65,25 @@ const CartPage = () => {
                   />
                   <div className="flex-1">
                     <h3 className="font-semibold text-lg mb-1">{item.name}</h3>
+                    {item.selectedVariants && Object.keys(item.selectedVariants).length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-2" data-testid={`cart-variants-${item.id}`}>
+                        {Object.entries(item.selectedVariants).map(([name, value]) => (
+                          <span
+                            key={name}
+                            className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full"
+                          >
+                            {name}: {value}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <p className="text-[#d4af37] font-bold mb-2">${item.price.toFixed(2)}</p>
                     <div className="flex items-center space-x-2">
                       <Button
                         variant="outline"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
+                        onClick={() => updateCartQuantity(key, item.quantity - 1)}
                         data-testid={`decrease-quantity-${item.id}`}
                       >
                         <Minus className="h-3 w-3" />
@@ -81,7 +95,7 @@ const CartPage = () => {
                         variant="outline"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
+                        onClick={() => updateCartQuantity(key, item.quantity + 1)}
                         data-testid={`increase-quantity-${item.id}`}
                       >
                         <Plus className="h-3 w-3" />
@@ -92,7 +106,7 @@ const CartPage = () => {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => removeFromCart(item.id)}
+                      onClick={() => removeFromCart(key)}
                       className="text-red-600 hover:text-red-700 hover:bg-red-50"
                       data-testid={`remove-item-${item.id}`}
                     >
@@ -101,7 +115,8 @@ const CartPage = () => {
                     <p className="font-bold text-lg">${(item.price * item.quantity).toFixed(2)}</p>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Order Summary */}

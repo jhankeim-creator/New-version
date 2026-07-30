@@ -2,7 +2,7 @@ import { useEffect, useState, useContext, useRef } from 'react';
 import { resolveImageUrl, categoryParent, parentRank } from '../lib/utils';
 import { useSeo } from '../lib/seo';
 import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, ShoppingBag, Star, ChevronLeft, ChevronRight, Heart, Truck, ShieldCheck, Headphones, BadgeCheck } from 'lucide-react';
+import { ArrowRight, ShoppingBag, ChevronLeft, ChevronRight, Heart, Truck, ShieldCheck, Headphones, BadgeCheck } from 'lucide-react';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
@@ -313,12 +313,6 @@ const HomePage = () => {
                       />
                     </button>
                   </div>
-                  {product.rating && (
-                    <div className="flex items-center gap-1 mt-2">
-                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      <span className="text-sm text-gray-600">{product.rating} ({product.reviews_count || 0})</span>
-                    </div>
-                  )}
                 </div>
               ))
             )}
@@ -415,13 +409,6 @@ const HomePage = () => {
                       />
                     </button>
                   </div>
-                  {product.rating > 0 && (
-                    <div className="flex items-center gap-1 text-xs text-gray-600">
-                      <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      <span>{product.rating.toFixed(1)}</span>
-                      {product.reviews_count > 0 && <span>({product.reviews_count})</span>}
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             ))}

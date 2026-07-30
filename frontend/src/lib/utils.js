@@ -53,8 +53,14 @@ export function brandRank(name) {
   return i < 0 ? 999 : i;
 }
 
-// Preferred display order of the top ("All X") sections.
-export const PARENT_ORDER = ["clothing", "shoes", "bags", "jewelry", "watches", "accessories"];
+// Preferred display order of the top ("All X") sections. The jewelry TYPE
+// sections (necklace, ring, ...) are grouped right after the "jewelry" umbrella
+// so they cluster together in the Categories menu.
+export const PARENT_ORDER = [
+  "clothing", "shoes", "bags",
+  "jewelry", "necklace", "ring", "bracelet", "brooch", "earrings", "jewelry-other",
+  "watches", "accessories",
+];
 export function parentRank(slug) {
   const i = PARENT_ORDER.indexOf(slug);
   return i < 0 ? 999 : i;

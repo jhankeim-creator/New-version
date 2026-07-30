@@ -281,16 +281,26 @@ def gallery_images(html, cap):
 
 
 def build_seeds(domains, session, delay):
-    """Return the list of root frames to crawl for the requested domains."""
+    """Return the list of root frames to crawl for the requested domains.
+
+    group='section' -> leaf category is the garment/accessory TYPE (T-Shirt,
+    Jewelry, ...) under a super parent (Clothing / Accessories); used where the
+    source spreads products across too many niche brands to make per-brand
+    categories worthwhile.
+    group='brand'   -> leaf category is the BRAND (LV, Gucci, ...) under the
+    section parent (Bags / Shoes); used where the source is organised by brand.
+    """
     seeds = []
     if "clothing" in domains:
         for cid, sec in CLOTHING_SEEDS:
             seeds.append(dict(base=CLOTHING_BASE, href=f"categoryen_{cid}.html",
-                              section=sec, brand_hint="", root_key=f"clothing:{sec}"))
+                              section=sec, brand_hint="", root_key=f"clothing:{sec}",
+                              group="section", super_name="Clothing", super_slug="clothing"))
     if "acc" in domains:
         for cid, sec in ACC_SEEDS:
             seeds.append(dict(base=ACC_BASE, href=f"categoryen_{cid}.html",
-                              section=sec, brand_hint="", root_key=f"acc:{sec}"))
+                              section=sec, brand_hint="", root_key=f"acc:{sec}",
+                              group="section", super_name="Accessories", super_slug="accessories"))
     for dom, base, sec in (("bags", BAGS_BASE, "Bags"), ("shoes", SHOES_BASE, "Shoes")):
         if dom not in domains:
             continue
@@ -306,20 +316,31 @@ def build_seeds(domains, session, delay):
             if is_generic(brand):
                 continue
             seeds.append(dict(base=base, href=it["href"], section=sec,
-                              brand_hint=brand, root_key=f"{dom}:{brand.lower()}"))
+                              brand_hint=brand, root_key=f"{dom}:{brand.lower()}",
+                              group="brand", super_name="", super_slug=""))
     return seeds
 
 
-def build_product(item, base, section, brand, images):
+def leaf_category(section, brand, group, super_name, super_slug):
+    """Compute (leaf_slug, leaf_name, parent_slug, parent_name) for a product."""
+    section_slug = slugify(section) or "misc"
+    if group == "section":
+        # leaf = the type (e.g. T-Shirt); parent = super (Clothing/Accessories)
+        return section_slug, section, super_slug, super_name
+    # group == "brand": leaf = brand (e.g. LV); parent = section (Bags/Shoes)
+    if brand:
+        return f"{section_slug}-{slugify(brand)}", brand, section_slug, section
+    return section_slug, section, "", ""
+
+
+def build_product(item, base, section, brand, images, group, super_name, super_slug):
     raw_title = clean_title(item["title"])
     size = size_of(item["title"])
-    section_slug = slugify(section) or "misc"
-    brand_slug = slugify(brand) if brand else ""
-    category_slug = f"{section_slug}-{brand_slug}" if brand_slug else section_slug
-    category_name = brand if brand else section
+    leaf_slug, leaf_name, parent_slug, parent_name = leaf_category(
+        section, brand, group, super_name, super_slug)
 
     # Professional, human-readable name: "<Brand> <Type> <REF>", e.g.
-    # "LV Bag M27330", "Amiri T-Shirt 8YLR3283" (source codes/dimensions/Chinese
+    # "LV Bag M27330", "Fila T-Shirt FXTX41" (source codes/dimensions/Chinese
     # are kept in the description, not the title).
     noun = SECTION_NOUN.get(section, section)
     code = ref_code(item["title"], item["id"])
@@ -335,14 +356,15 @@ def build_product(item, base, section, brand, images):
     if raw_title:
         desc_bits.append(f"Reference: {raw_title}.")
 
-    tags = [t for t in {(brand or "").lower(), section_slug, category_slug, "imported"} if t]
+    tags = [t for t in {(brand or "").lower(), leaf_slug, parent_slug, "imported"} if t]
 
     return {
         "name": name or f"{section} {item['id']}",
         "description": " ".join(desc_bits),
-        "category": category_slug,
-        "category_name": category_name,
-        "section": section_slug,
+        "category": leaf_slug,
+        "category_name": leaf_name,
+        "parent_slug": parent_slug,
+        "parent_name": parent_name,
         "section_name": section,
         "brand": brand,
         "size": size,
@@ -357,13 +379,15 @@ def build_product(item, base, section, brand, images):
 def crawl(seeds, since_date, limit, per_root, per_category, max_images, delay, dry_run, session):
     collected, visited, root_counts, cat_counts = [], set(), {}, {}
     skipped_old = 0
-    stack = [(s["base"], s["href"], s["section"], s["brand_hint"], s["root_key"], None)
+    stack = [(s["base"], s["href"], s["section"], s["brand_hint"], s["root_key"],
+              None, s["group"], s["super_name"], s["super_slug"])
              for s in reversed(seeds)]
 
     while stack:
         if limit and len(collected) >= limit:
             break
-        base, href, section, brand_hint, root_key, parent_title = stack.pop()
+        (base, href, section, brand_hint, root_key, parent_title,
+         group, super_name, super_slug) = stack.pop()
         if per_root and root_counts.get(root_key, 0) >= per_root:
             continue
         key = (base, href.split("?")[0])
@@ -379,7 +403,8 @@ def crawl(seeds, since_date, limit, per_root, per_category, max_images, delay, d
 
         for it in parse_items(html):
             if it["kind"] == "category":
-                stack.append((base, it["href"], section, brand_hint, root_key, it["title"]))
+                stack.append((base, it["href"], section, brand_hint, root_key,
+                              it["title"], group, super_name, super_slug))
             elif it["kind"] == "product":
                 if per_root and root_counts.get(root_key, 0) >= per_root:
                     continue
@@ -391,14 +416,15 @@ def crawl(seeds, since_date, limit, per_root, per_category, max_images, delay, d
                     if d and d < since_date:
                         skipped_old += 1
                         continue
-                # Resolve brand + category first so a full category is skipped
-                # BEFORE we spend a request fetching its gallery.
+                # Resolve brand + leaf category first so a full category is
+                # skipped BEFORE we spend a request fetching its gallery.
                 brand = brand_hint or brand_of(it["title"]) or clean_brand_name(parent_title or "")
                 if is_generic(brand):
                     brand = ""
-                sec_slug = slugify(section) or "misc"
-                cat_slug = f"{sec_slug}-{slugify(brand)}" if brand else sec_slug
-                if per_category and cat_counts.get(cat_slug, 0) >= per_category:
+                cat_slug = leaf_category(section, brand, group, super_name, super_slug)[0]
+                # Per-category cap only limits brand leaves; type leaves
+                # (clothing/acc) are bounded by --per-root-limit instead.
+                if group == "brand" and per_category and cat_counts.get(cat_slug, 0) >= per_category:
                     continue
                 try:
                     images = gallery_images(fetch(urljoin(base, it["href"]), delay, session), max_images)
@@ -409,7 +435,7 @@ def crawl(seeds, since_date, limit, per_root, per_category, max_images, delay, d
                     images = [quote(it["thumb"], safe=":/?&=%")]
                 if not images:
                     continue
-                record = build_product(it, base, section, brand, images)
+                record = build_product(it, base, section, brand, images, group, super_name, super_slug)
                 collected.append(record)
                 root_counts[root_key] = root_counts.get(root_key, 0) + 1
                 cat_counts[cat_slug] = cat_counts.get(cat_slug, 0) + 1
@@ -441,41 +467,42 @@ async def upsert_products(records, stock, replace=False):
     now = datetime.now(timezone.utc).isoformat()
     inserted = updated = 0
     categories_seen = set()
-    sections_seen = set()
+    parents_seen = set()
 
     for rec in records:
-        sec_slug = rec["section"]
-        sec_name = rec["section_name"]
-        # Ensure the PARENT section category exists (top-level, no parent).
-        if sec_slug not in sections_seen:
-            sections_seen.add(sec_slug)
+        parent_slug = rec["parent_slug"]
+        parent_name = rec["parent_name"]
+        # Ensure the PARENT category exists (top-level, no parent of its own).
+        if parent_slug and parent_slug not in parents_seen:
+            parents_seen.add(parent_slug)
             await db.categories.update_one(
-                {"slug": sec_slug},
-                {"$set": {"name": sec_name, "section": sec_name, "section_slug": sec_slug,
-                          "parent": "", "parent_name": ""},
+                {"slug": parent_slug},
+                {"$set": {"name": parent_name, "section": parent_name,
+                          "section_slug": parent_slug, "parent": "", "parent_name": ""},
                  "$setOnInsert": {
-                    "id": str(uuid.uuid4()), "slug": sec_slug,
-                    "description": f"{sec_name} collection",
+                    "id": str(uuid.uuid4()), "slug": parent_slug,
+                    "description": f"{parent_name} collection",
                     "image": rec["images"][0] if rec["images"] else "", "created_at": now}},
                 upsert=True,
             )
         slug = rec["category"]
         if slug not in categories_seen:
             categories_seen.add(slug)
-            is_child = slug != sec_slug
+            # section/section_slug mirror the parent so the storefront groups
+            # leaf categories under their parent without extra changes.
             await db.categories.update_one(
                 {"slug": slug},
                 {"$set": {
                     "name": rec["category_name"],
-                    "section": sec_name,
-                    "section_slug": sec_slug,
-                    "parent": sec_slug if is_child else "",
-                    "parent_name": sec_name if is_child else "",
+                    "section": parent_name,
+                    "section_slug": parent_slug,
+                    "parent": parent_slug,
+                    "parent_name": parent_name,
                  },
                  "$setOnInsert": {
                     "id": str(uuid.uuid4()),
                     "slug": slug,
-                    "description": f"{rec['category_name']} - {sec_name}",
+                    "description": f"{rec['category_name']} - {parent_name}" if parent_name else rec["category_name"],
                     "image": rec["images"][0] if rec["images"] else "",
                     "created_at": now,
                  }},
@@ -484,8 +511,9 @@ async def upsert_products(records, stock, replace=False):
 
         set_fields = {
             "name": rec["name"], "description": rec["description"],
-            "category": slug, "section": rec["section"],
-            "section_name": rec["section_name"], "brand": rec["brand"],
+            "category": slug, "section": rec["parent_slug"],
+            "section_name": rec["parent_name"], "type_name": rec["section_name"],
+            "brand": rec["brand"],
             "images": rec["images"], "tags": rec["tags"], "is_new": True,
             "source_site": "tangma2088", "source_url": rec["source_url"],
             "updated_at": now,

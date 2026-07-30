@@ -423,8 +423,9 @@ def build_product(item, base, group, type_name, brand, parent_slug, parent_name,
     }
 
 
-def crawl(seeds, since_date, limit, per_root, per_category, max_images, delay, dry_run, session):
-    collected, visited, root_counts, cat_counts = [], set(), {}, {}
+def crawl(seeds, since_date, limit, per_root, per_category, per_album,
+          max_images, delay, dry_run, session):
+    collected, visited, root_counts, cat_counts, album_counts = [], set(), {}, {}, {}
     skipped_old = 0
     stack = [(s["base"], s["href"], s["root_key"], None, s["group"], s["parent_slug"],
               s["parent_name"], s["noun"], s["type_name"], s["brand_hint"])
@@ -448,11 +449,12 @@ def crawl(seeds, since_date, limit, per_root, per_category, max_images, delay, d
             print(f"  ! skip {href}: {exc}", file=sys.stderr)
             continue
 
+        subcats = []
         for it in parse_items(html):
             if it["kind"] == "category":
-                stack.append((base, it["href"], root_key, it["title"], group,
-                              parent_slug, parent_name, noun, type_name, brand_hint))
-            elif it["kind"] == "product":
+                subcats.append(it)
+                continue
+            if it["kind"] == "product":
                 if per_root and root_counts.get(root_key, 0) >= per_root:
                     continue
                 if since_date and it["date"]:
@@ -473,6 +475,12 @@ def crawl(seeds, since_date, limit, per_root, per_category, max_images, delay, d
                 # bounded by --per-root-limit instead.
                 if group == "brand" and per_category and cat_counts.get(cat_slug, 0) >= per_category:
                     continue
+                # Per-album cap: keep only a few products per model album (e.g.
+                # per Rolex model) so a category shows model VARIETY instead of
+                # 30 items from the first album.
+                album_key = (root_key, parent_title or "")
+                if per_album and album_counts.get(album_key, 0) >= per_album:
+                    continue
                 try:
                     images = gallery_images(fetch(urljoin(base, it["href"]), delay, session), max_images)
                 except RuntimeError as exc:
@@ -487,11 +495,17 @@ def crawl(seeds, since_date, limit, per_root, per_category, max_images, delay, d
                 collected.append(record)
                 root_counts[root_key] = root_counts.get(root_key, 0) + 1
                 cat_counts[cat_slug] = cat_counts.get(cat_slug, 0) + 1
+                album_counts[album_key] = album_counts.get(album_key, 0) + 1
                 if dry_run:
                     print(f"  [{len(collected):>4}] {record['date'] or '????-??-??'} "
-                          f"| {record['category']:<26} | {len(images):>2} imgs | {record['name']}")
+                          f"| {record['category']:<20} | {len(images):>2}i | {record['name']}")
                 if limit and len(collected) >= limit:
                     break
+        # Push sub-categories so they are processed in PAGE ORDER (top first),
+        # e.g. Rolex "Date Just, Day Date, Daytona, ..." before "Lovers".
+        for it in reversed(subcats):
+            stack.append((base, it["href"], root_key, it["title"], group,
+                          parent_slug, parent_name, noun, type_name, brand_hint))
     return collected, skipped_old
 
 
@@ -597,6 +611,9 @@ def parse_args(argv):
                    help="Max products per root seed (brand or section) (0 = none).")
     p.add_argument("--per-category-limit", type=int, default=30,
                    help="Max products per leaf category (section-brand) (0 = none).")
+    p.add_argument("--per-album-limit", type=int, default=0,
+                   help="Max products per source album/model (e.g. per Rolex model) "
+                        "for variety within a category (0 = none).")
     p.add_argument("--max-images", type=int, default=6, help="Max images/product (0 = all).")
     p.add_argument("--delay", type=float, default=0.3, help="Delay between requests (s).")
     p.add_argument("--stock", type=int, default=10, help="Initial stock for new products.")
@@ -635,7 +652,7 @@ def main(argv=None):
 
     records, skipped_old = crawl(
         seeds, since_date, args.limit, args.per_root_limit, args.per_category_limit,
-        args.max_images, args.delay, args.dry_run, session,
+        args.per_album_limit, args.max_images, args.delay, args.dry_run, session,
     )
 
     print("-" * 80)

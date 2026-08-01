@@ -2,7 +2,7 @@ import { useEffect, useState, useContext, useMemo } from 'react';
 import { resolveImageUrl } from '../lib/utils';
 import { useSeo } from '../lib/seo';
 import { productKeywords } from '../lib/seo';
-import { getProductVariantGroups } from '../lib/variants';
+import { getProductVariantGroups, variantPriceDelta } from '../lib/variants';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
@@ -39,6 +39,11 @@ const ProductPage = () => {
   };
 
   const variantGroups = useMemo(() => getProductVariantGroups(product), [product]);
+  const priceDelta = useMemo(
+    () => variantPriceDelta(variantGroups, selectedVariants),
+    [variantGroups, selectedVariants]
+  );
+  const displayPrice = Math.max(0, (product?.price || 0) + priceDelta);
 
   const handleAddToCart = () => {
     if (!product || quantity <= 0) return;
@@ -48,7 +53,12 @@ const ProductPage = () => {
       toast.error(`Please select a ${missing.name.toLowerCase()}`);
       return;
     }
-    addToCart(product, quantity, variantGroups.length ? selectedVariants : null);
+    // Pass the variant-adjusted price so the cart/checkout charge is correct.
+    addToCart(
+      { ...product, price: displayPrice },
+      quantity,
+      variantGroups.length ? selectedVariants : null
+    );
   };
 
   useSeo({
@@ -126,8 +136,13 @@ const ProductPage = () => {
               </h1>
               <div className="flex items-center gap-3 mb-6" data-testid="product-price">
                 <span className={`text-3xl font-bold ${product.on_sale ? 'text-red-600' : 'text-gold-600'}`}>
-                  ${product.price.toFixed(2)}
+                  ${displayPrice.toFixed(2)}
                 </span>
+                {priceDelta !== 0 && (
+                  <span className="text-sm text-ink-muted">
+                    (base ${product.price.toFixed(2)}{priceDelta > 0 ? ` + $${priceDelta.toFixed(2)}` : ` - $${Math.abs(priceDelta).toFixed(2)}`})
+                  </span>
+                )}
                 {product.on_sale && product.compare_at_price && (
                   <span className="text-xl text-gray-400 line-through">${product.compare_at_price.toFixed(2)}</span>
                 )}

@@ -151,6 +151,12 @@ class Product(BaseModel):
     reviews_count: int = 0
     view_count: int = 0
     sales_count: int = 0
+    # Product Variants (sizes, colors, ...). ``variants`` holds the selectable
+    # axes ([{name, values, prices}]) where ``prices`` optionally maps a value to
+    # a price adjustment (+/-). ``variant_options`` holds explicit combinations.
+    has_variants: bool = False
+    variants: List[dict] = []
+    variant_options: List[dict] = []
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -202,6 +208,9 @@ class ProductUpdate(BaseModel):
     tags: Optional[List[str]] = None
     meta_title: Optional[str] = None
     meta_description: Optional[str] = None
+    has_variants: Optional[bool] = None
+    variants: Optional[List[dict]] = None
+    variant_options: Optional[List[dict]] = None
 
 class CartItem(BaseModel):
     product_id: str

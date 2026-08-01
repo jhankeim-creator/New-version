@@ -31,6 +31,7 @@ import ScrollToTop from './components/ScrollToTop';
 import WhatsAppButton from './components/WhatsAppButton';
 import FloatingAnnouncement from './components/FloatingAnnouncement';
 import GoogleAnalytics from './components/GoogleAnalytics';
+import { SeoRouteGuard } from './lib/seo';
 import { I18nProvider } from './i18n';
 import { buildCartKey } from './lib/variants';
 
@@ -203,6 +204,7 @@ function App() {
         <div className="App">
           <BrowserRouter>
             <ScrollToTop />
+            <SeoRouteGuard />
             <Navbar />
             <Routes>
               <Route path="/" element={<HomePage />} />

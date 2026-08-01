@@ -45,7 +45,8 @@ const ShopPage = () => {
     title: category ? `${category.charAt(0).toUpperCase()}${category.slice(1)} Collection` : 'Shop All Products',
     description: 'Browse the full Kayee01 collection of jewelry, watches, fashion and accessories.',
     keywords: category ? [String(category).replace(/-/g, ' '), 'buy online', 'designer'] : ['shop', 'jewelry', 'watches', 'accessories'],
-    path: location.pathname,
+    // Never include ?sort / ?page query strings in the canonical.
+    path: category ? `/shop/${category}` : '/shop',
   });
 
   useEffect(() => {

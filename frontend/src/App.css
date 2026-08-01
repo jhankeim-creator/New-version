@@ -107,6 +107,14 @@ h1, h2, h3, h4, h5, h6 {
   color: #3d362f;
   margin-bottom: 1.75rem;
 }
+.blog-content .blog-meta {
+  font-family: system-ui, sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8a7355;
+  margin-bottom: 1.25rem;
+}
 .blog-content h2 {
   font-family: "Playfair Display", Georgia, serif;
   font-size: 1.65rem;

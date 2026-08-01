@@ -287,10 +287,18 @@ const AdminOrders = () => {
                 </p>
               </div>
 
-              {selectedOrder.notes && (
+              {(selectedOrder.notes || selectedOrder.checkout_answers) && (
                 <div>
-                  <p className="text-sm text-gray-600 mb-1">Order Notes</p>
-                  <p className="font-semibold">{selectedOrder.notes}</p>
+                  <p className="text-sm text-gray-600 mb-1">Customer preferences / notes</p>
+                  {selectedOrder.notes ? (
+                    <p className="font-semibold whitespace-pre-line bg-cream/60 border border-gold-100 rounded-lg p-3 text-sm">
+                      {selectedOrder.notes}
+                    </p>
+                  ) : (
+                    <pre className="text-xs bg-gray-50 p-3 rounded overflow-auto">
+                      {JSON.stringify(selectedOrder.checkout_answers, null, 2)}
+                    </pre>
+                  )}
                 </div>
               )}
 

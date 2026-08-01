@@ -256,6 +256,8 @@ class Order(BaseModel):
     shipping_cost: Optional[float] = 0.0
     phone: Optional[str] = ""
     notes: Optional[str] = None
+    # Structured answers from checkout questions (color, size note, gift, etc.)
+    checkout_answers: Optional[dict] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     # Tracking information
@@ -327,6 +329,8 @@ class OrderCreate(BaseModel):
     shipping_cost: Optional[float] = 0.0
     phone: Optional[str] = ""
     notes: Optional[str] = None
+    checkout_answers: Optional[dict] = None
+
 
 # ===== HELPER FUNCTIONS =====
 

@@ -12,6 +12,7 @@ import Footer from '../components/Footer';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { User, Package, Heart, MessageCircle, Mail, Phone, MapPin, Calendar, LogOut, ShoppingBag, Clock, Star, TrendingUp, LayoutDashboard, ArrowRight } from 'lucide-react';
+import { fetchWhatsappSettings, buildWaLink } from '../lib/whatsapp';
 
 const AccountPage = () => {
   const { user, token, API, setUser, setToken, logout } = useContext(CartContext);
@@ -19,6 +20,7 @@ const AccountPage = () => {
   const [loading, setLoading] = useState(false);
   const [orders, setOrders] = useState([]);
   const [wishlist, setWishlist] = useState([]);
+  const [waLink, setWaLink] = useState('https://wa.me/12393293813');
   const [stats, setStats] = useState({
     totalOrders: 0,
     totalSpent: 0,
@@ -50,6 +52,16 @@ const AccountPage = () => {
     loadOrders();
     loadWishlist();
   }, [user, token]);
+
+  useEffect(() => {
+    let active = true;
+    fetchWhatsappSettings(API).then((settings) => {
+      if (!active || !settings?.buttons?.length) return;
+      const b = settings.buttons[0];
+      setWaLink(buildWaLink(b.number, b.message || 'Hello Kayee01, I need assistance.'));
+    });
+    return () => { active = false; };
+  }, [API]);
 
   const loadOrders = async () => {
     try {
@@ -622,7 +634,7 @@ const AccountPage = () => {
                         <Mail className="h-5 w-5" />
                         <span>support@kayee01.com</span>
                       </a>
-                      <a href="https://wa.me/1234567890" target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-gray-600 hover:text-[#d4af37]">
+                      <a href={waLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 text-gray-600 hover:text-[#d4af37]">
                         <Phone className="h-5 w-5" />
                         <span>WhatsApp Support</span>
                       </a>

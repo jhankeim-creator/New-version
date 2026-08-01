@@ -715,24 +715,73 @@ async def get_categories():
             logger.warning(f"Skipping invalid category document {cat.get('id')}: {e}")
     return result
 
+def _is_usable_category_image(url: str) -> bool:
+    """Reject empty and stub category-folder URLs from the wholesale source."""
+    if not url or not isinstance(url, str):
+        return False
+    u = url.strip()
+    if not u:
+        return False
+    if re.search(r"/upfile/category/?$", u, re.I):
+        return False
+    return True
+
+
 @api_router.get("/categories/with-counts")
 async def get_categories_with_counts():
-    """Categories annotated with how many products each contains (by slug)."""
+    """Categories annotated with how many products each contains (by slug).
+
+    When a category has no usable ``image``, fall back to the first product
+    photo in that category or (for mother categories) any descendant leaf.
+    """
     agg = await db.products.aggregate([
         {"$group": {"_id": "$category", "count": {"$sum": 1}}}
     ]).to_list(length=None)
     counts = {d["_id"]: d["count"] for d in agg if d.get("_id")}
-    categories = await db.categories.find({}, {"_id": 0}).to_list(200)
+
+    # First product image per leaf category (for tile fallbacks).
+    img_agg = await db.products.aggregate([
+        {"$match": {"images.0": {"$exists": True, "$ne": ""}}},
+        {"$group": {"_id": "$category", "image": {"$first": {"$arrayElemAt": ["$images", 0]}}}},
+    ]).to_list(length=None)
+    leaf_images = {d["_id"]: d["image"] for d in img_agg if d.get("_id") and d.get("image")}
+
+    categories = await db.categories.find({}, {"_id": 0}).to_list(500)
+    children = {}
+    for cat in categories:
+        parent = cat.get("parent") or ""
+        slug = cat.get("slug") or ""
+        if parent and slug:
+            children.setdefault(parent, []).append(slug)
+
+    def descendant_image(slug: str) -> str:
+        if leaf_images.get(slug):
+            return leaf_images[slug]
+        stack = list(children.get(slug, []))
+        seen = set()
+        while stack:
+            s = stack.pop()
+            if s in seen:
+                continue
+            seen.add(s)
+            if leaf_images.get(s):
+                return leaf_images[s]
+            stack.extend(children.get(s, []))
+        return ""
+
     result = []
     for cat in categories:
         parse_from_mongo(cat)
         if not cat.get("slug") and cat.get("name"):
             cat["slug"] = str(cat["name"]).lower().strip().replace(" ", "-")
+        image = cat.get("image", "") or ""
+        if not _is_usable_category_image(image):
+            image = descendant_image(cat.get("slug") or "")
         result.append({
             "id": cat.get("id"),
             "name": cat.get("name"),
             "slug": cat.get("slug"),
-            "image": cat.get("image", ""),
+            "image": image,
             "description": cat.get("description", ""),
             "section": cat.get("section", ""),
             "section_slug": cat.get("section_slug", ""),
@@ -1095,6 +1144,101 @@ async def prune_broken_image_products(
         "deleted": deleted,
         "applied": bool(apply),
         "broken": broken[:500],
+    }
+
+
+@api_router.post("/products/maintenance/backfill-variants-and-images")
+async def backfill_variants_and_category_images(
+    apply: bool = False,
+    admin: User = Depends(get_current_admin),
+):
+    """Backfill Size variants from description ranges + fill empty category images.
+
+    - Products with ``Sizes: S-2XL`` (etc.) and empty ``variants`` get a structured
+      Size axis so color/size selectors show on the storefront and in admin.
+    - Categories with empty or stub ``/upfile/category/`` images get the first
+      product photo from that category (or a descendant).
+    Pass ``apply=true`` to write; otherwise dry-run counts only.
+    """
+    from size_range import size_variants_from_text
+
+    products = await db.products.find(
+        {},
+        {"_id": 0, "id": 1, "name": 1, "description": 1, "variants": 1, "has_variants": 1},
+    ).to_list(length=None)
+
+    variant_updates = []
+    for p in products:
+        existing = p.get("variants") or []
+        if existing:
+            continue
+        variants = size_variants_from_text(p.get("description") or "", p.get("name") or "")
+        if not variants:
+            continue
+        variant_updates.append({"id": p["id"], "variants": variants})
+
+    # Category image backfill
+    img_agg = await db.products.aggregate([
+        {"$match": {"images.0": {"$exists": True, "$ne": ""}}},
+        {"$group": {"_id": "$category", "image": {"$first": {"$arrayElemAt": ["$images", 0]}}}},
+    ]).to_list(length=None)
+    leaf_images = {d["_id"]: d["image"] for d in img_agg if d.get("_id") and d.get("image")}
+
+    categories = await db.categories.find({}, {"_id": 0, "id": 1, "slug": 1, "image": 1, "parent": 1}).to_list(500)
+    children = {}
+    for cat in categories:
+        parent = cat.get("parent") or ""
+        slug = cat.get("slug") or ""
+        if parent and slug:
+            children.setdefault(parent, []).append(slug)
+
+    def descendant_image(slug: str) -> str:
+        if leaf_images.get(slug):
+            return leaf_images[slug]
+        stack = list(children.get(slug, []))
+        seen = set()
+        while stack:
+            s = stack.pop()
+            if s in seen:
+                continue
+            seen.add(s)
+            if leaf_images.get(s):
+                return leaf_images[s]
+            stack.extend(children.get(s, []))
+        return ""
+
+    image_updates = []
+    for cat in categories:
+        if _is_usable_category_image(cat.get("image") or ""):
+            continue
+        img = descendant_image(cat.get("slug") or "")
+        if img:
+            image_updates.append({"id": cat.get("id"), "slug": cat.get("slug"), "image": img})
+
+    variants_written = 0
+    images_written = 0
+    if apply:
+        for u in variant_updates:
+            res = await db.products.update_one(
+                {"id": u["id"]},
+                {"$set": {"variants": u["variants"], "has_variants": True}},
+            )
+            variants_written += res.modified_count
+        for u in image_updates:
+            q = {"id": u["id"]} if u.get("id") else {"slug": u["slug"]}
+            res = await db.categories.update_one(q, {"$set": {"image": u["image"]}})
+            images_written += res.modified_count
+
+    return {
+        "applied": bool(apply),
+        "products_needing_variants": len(variant_updates),
+        "variants_written": variants_written,
+        "categories_needing_images": len(image_updates),
+        "images_written": images_written,
+        "variant_samples": [
+            {"id": u["id"], "values": u["variants"][0]["values"]} for u in variant_updates[:8]
+        ],
+        "image_samples": image_updates[:8],
     }
 
 

@@ -1,9 +1,11 @@
 // Utilities for product variants (color, size, ...).
 //
 // Many imported products list their available options inside the free-text
-// description (e.g. "Color: Red, Blue, Green" or "Sizes: S / M / L") instead of
+// description (e.g. "Color: Red, Blue, Green" or "Sizes: S-2XL") instead of
 // as structured data. These helpers extract those options so the storefront can
 // render them as selectable choices before "Add to Cart".
+
+import { expandSizeGroup, expandSizeToken } from './sizeRange';
 
 // Labels we confidently treat as a variant axis even when the values are terse.
 const KNOWN_LABELS = /^(colou?rs?|sizes?|materials?|styles?|options?|variants?|models?)$/i;
@@ -20,6 +22,23 @@ function titleCase(text) {
 }
 
 /**
+ * Split a description into "Label: value" clauses.
+ * Imports often store one flat string like:
+ *   "Brand: Gucci. Category: Polo. Sizes: S-2XL. Reference: ..."
+ * A naive regex that captures values to end-of-line would swallow every later
+ * label into the first value — so we stop each value at the next period.
+ */
+function extractLabeledClauses(description) {
+  const clauses = [];
+  const re = /([A-Za-z][A-Za-z \-/]{0,24}?)\s*[:：]\s*([^.\n\r]+)\.?/g;
+  let match;
+  while ((match = re.exec(description)) !== null) {
+    clauses.push({ name: match[1].trim(), valuesRaw: match[2].trim() });
+  }
+  return clauses;
+}
+
+/**
  * Extract variant groups from a free-text description.
  * Returns an array like: [{ name: "Color", values: ["Red", "Blue"] }, ...]
  */
@@ -28,40 +47,37 @@ export function parseVariantsFromDescription(description) {
 
   const groups = [];
   const seen = new Set();
-  // Match "Label: value1, value2, ..." on its own line or clause.
-  const lineRe = /([A-Za-z][A-Za-z \-/]{0,24}?)\s*[:：]\s*([^\n\r]+)/g;
 
-  const lines = description.split(/\r?\n/);
-  for (const line of lines) {
-    lineRe.lastIndex = 0;
-    let match;
-    while ((match = lineRe.exec(line)) !== null) {
-      const rawName = match[1].trim();
-      const rawValues = match[2].trim();
-      if (!rawName || !rawValues) continue;
+  for (const { name: rawName, valuesRaw } of extractLabeledClauses(description)) {
+    if (!rawName || !valuesRaw) continue;
 
-      const values = rawValues
-        .split(VALUE_SPLIT)
-        .map((v) => v.trim())
-        .filter(Boolean);
+    let values = valuesRaw
+      .split(VALUE_SPLIT)
+      .map((v) => v.trim())
+      .filter(Boolean);
 
-      // Need at least two distinct, terse values to be a real choice.
-      if (values.length < 2) continue;
-      if (values.some((v) => v.length > 24 || v.split(/\s+/).length > 4)) continue;
-
-      const key = rawName.toLowerCase();
-      const isKnown = KNOWN_LABELS.test(key);
-      // For unknown labels, only accept short single/double-word labels to
-      // avoid turning ordinary sentences ("Note: ...") into variants.
-      if (!isKnown && rawName.split(/\s+/).length > 2) continue;
-
-      const name = titleCase(rawName);
-      const dedupKey = name.toLowerCase();
-      if (seen.has(dedupKey)) continue;
-      seen.add(dedupKey);
-
-      groups.push({ name, values: [...new Set(values)] });
+    // Expand wholesale size ranges ("S-2XL", "39-45") into real choices.
+    if (/^sizes?$/i.test(rawName) && values.length === 1) {
+      const expanded = expandSizeToken(values[0]);
+      if (expanded.length >= 2) values = expanded;
     }
+
+    // Need at least two distinct, terse values to be a real choice.
+    if (values.length < 2) continue;
+    if (values.some((v) => v.length > 24 || v.split(/\s+/).length > 4)) continue;
+
+    const key = rawName.toLowerCase();
+    const isKnown = KNOWN_LABELS.test(key);
+    // For unknown labels, only accept short single/double-word labels to
+    // avoid turning ordinary sentences ("Note: ...") into variants.
+    if (!isKnown && rawName.split(/\s+/).length > 2) continue;
+
+    const name = titleCase(rawName);
+    const dedupKey = name.toLowerCase();
+    if (seen.has(dedupKey)) continue;
+    seen.add(dedupKey);
+
+    groups.push(expandSizeGroup({ name, values: [...new Set(values)] }));
   }
   return groups;
 }
@@ -72,7 +88,12 @@ export function normalizeVariants(variants) {
   return variants
     .filter((v) => v && v.name && Array.isArray(v.values) && v.values.length > 0)
     .map((v) => {
-      const values = [...new Set(v.values.map((x) => String(x).trim()).filter(Boolean))];
+      let values = [...new Set(v.values.map((x) => String(x).trim()).filter(Boolean))];
+      // Expand a lone size-range token stored in structured data too.
+      if (/^sizes?$/i.test(String(v.name)) && values.length === 1) {
+        const expanded = expandSizeToken(values[0]);
+        if (expanded.length >= 2) values = expanded;
+      }
       // Carry optional per-value price adjustments ({ value: delta }).
       const prices = {};
       if (v.prices && typeof v.prices === 'object') {
@@ -81,7 +102,7 @@ export function normalizeVariants(variants) {
           if (!Number.isNaN(delta) && delta !== 0) prices[value] = delta;
         }
       }
-      return { name: titleCase(String(v.name)), values, prices };
+      return expandSizeGroup({ name: titleCase(String(v.name)), values, prices });
     })
     .filter((v) => v.values.length > 0);
 }

@@ -274,12 +274,35 @@ async def upsert_jewelry(records, stock):
             "is_new": True, "source_site": "tangma2088",
             "source_url": rec["source_url"], "updated_at": now,
         }
+        try:
+            from size_range import size_variants_from_text
+            variants = size_variants_from_text(
+                rec.get("description") or "",
+                rec.get("name") or "",
+                rec.get("size") or "",
+            )
+            if variants:
+                set_fields["variants"] = variants
+                set_fields["has_variants"] = True
+        except Exception:
+            pass
         set_on_insert = {
             "id": str(uuid.uuid4()),
             "slug": f"{slugify(rec['name']) or 'jewelry'}-{rec['source_id']}",
             "price": 0.0, "stock": stock, "featured": False, "on_sale": False,
             "created_at": now,
         }
+        if rec.get("images"):
+            await db.categories.update_one(
+                {
+                    "slug": {"$in": [s for s in (leaf_slug, type_slug, "jewelry") if s]},
+                    "$or": [
+                        {"image": {"$in": [None, ""]}},
+                        {"image": {"$regex": r"/upfile/category/?$"}},
+                    ],
+                },
+                {"$set": {"image": rec["images"][0]}},
+            )
         res = await db.products.update_one(
             {"source_site": "tangma2088", "source_id": rec["source_id"]},
             {"$set": set_fields, "$setOnInsert": set_on_insert},

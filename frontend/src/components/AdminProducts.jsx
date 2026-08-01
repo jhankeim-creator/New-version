@@ -27,6 +27,7 @@ const AdminProducts = () => {
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkCategory, setBulkCategory] = useState('');
   const [scanningBroken, setScanningBroken] = useState(false);
+  const [backfilling, setBackfilling] = useState(false);
   const perPage = 24;
   const [formData, setFormData] = useState({
     name: '',
@@ -121,6 +122,44 @@ const AdminProducts = () => {
       toast.error('Broken image scan failed');
     } finally {
       setScanningBroken(false);
+    }
+  };
+
+  const backfillSizesAndImages = async () => {
+    setBackfilling(true);
+    try {
+      const dry = await axios.post(
+        `${API}/products/maintenance/backfill-variants-and-images?apply=false`,
+        {},
+        { headers: authHeaders() }
+      );
+      const needVar = dry.data?.products_needing_variants || 0;
+      const needImg = dry.data?.categories_needing_images || 0;
+      if (needVar === 0 && needImg === 0) {
+        toast.success('Sizes and category images are already up to date');
+        return;
+      }
+      if (
+        !window.confirm(
+          `Fill Size options on ${needVar} product(s) and images on ${needImg} categor${needImg === 1 ? 'y' : 'ies'}?`
+        )
+      ) {
+        return;
+      }
+      const res = await axios.post(
+        `${API}/products/maintenance/backfill-variants-and-images?apply=true`,
+        {},
+        { headers: authHeaders() }
+      );
+      toast.success(
+        `Updated ${res.data?.variants_written || 0} products, ${res.data?.images_written || 0} categories`
+      );
+      await loadData();
+    } catch (err) {
+      console.error('Backfill failed:', err);
+      toast.error('Backfill failed');
+    } finally {
+      setBackfilling(false);
     }
   };
 
@@ -318,7 +357,15 @@ const AdminProducts = () => {
             {products.length} products across {orderedCategories.length} categories
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            onClick={backfillSizesAndImages}
+            variant="outline"
+            disabled={backfilling}
+            data-testid="backfill-sizes-images-button"
+          >
+            {backfilling ? 'Filling…' : 'Fill sizes & category images'}
+          </Button>
           <Button
             onClick={scanBrokenImages}
             variant="outline"

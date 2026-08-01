@@ -130,10 +130,11 @@ def build_jewelry_product(item, base, type_label, brand, images, parent_title=""
 
 
 def crawl_jewelry(since_date, limit, per_category, per_brand, max_images,
-                  delay, dry_run, session):
-    seeds = brand_seeds_from(ACC_BASE, f"categoryen_{JEWELRY_LIST[0]}.html",
-                             "jewelry", "All Jewelry", "Jewelry", session, delay)
-    print(f"Discovered {len(seeds)} jewelry brand categories to crawl.")
+                  delay, dry_run, session, seeds=None, existing_ids=None):
+    if seeds is None:
+        seeds = brand_seeds_from(ACC_BASE, f"categoryen_{JEWELRY_LIST[0]}.html",
+                                 "jewelry", "All Jewelry", "Jewelry", session, delay)
+    print(f"Discovered {len(seeds)} jewelry categories to crawl.")
 
     collected, visited = [], set()
     leaf_counts, brand_counts = {}, {}
@@ -163,6 +164,8 @@ def crawl_jewelry(since_date, limit, per_category, per_brand, max_images,
                     subcats.append(it)
                     continue
                 # product
+                if existing_ids is not None and str(it["id"]) in existing_ids:
+                    continue  # already imported - skip the slow gallery fetch
                 if since_date and it["date"]:
                     try:
                         d = datetime.strptime(it["date"], "%Y-%m-%d").date()
@@ -304,6 +307,12 @@ def parse_args(argv):
     p.add_argument("--delay", type=float, default=0.25, help="Delay between requests (s).")
     p.add_argument("--stock", type=int, default=10, help="Initial stock for new products.")
     p.add_argument("--dry-run", action="store_true", help="Crawl + report only; no DB writes.")
+    p.add_argument("--categories", default="",
+                   help="Comma list of specific macc jewelry category IDs to crawl "
+                        "(e.g. 52485,73940,139985). Default: discover all brands under 43569.")
+    p.add_argument("--skip-existing", action="store_true",
+                   help="Skip products whose source_id already exists in MongoDB "
+                        "(only fetch galleries for genuinely new products).")
     return p.parse_args(argv)
 
 
@@ -326,9 +335,31 @@ def main(argv=None):
     session = requests.Session()
     session.headers.update({"User-Agent": UA})
 
+    seeds = None
+    if args.categories.strip():
+        cids = [c.strip() for c in args.categories.split(",") if c.strip()]
+        seeds = [{"href": f"categoryen_{cid}.html", "brand_hint": ""} for cid in cids]
+        print(f"Seeding from {len(seeds)} specific category IDs: {cids}")
+
+    existing_ids = None
+    if args.skip_existing and not args.dry_run:
+        import os
+        from pymongo import MongoClient
+        mongo_url = os.environ.get("MONGO_URL")
+        db_name = os.environ.get("DB_NAME")
+        if not mongo_url:
+            raise SystemExit("MONGO_URL must be set for --skip-existing.")
+        client = MongoClient(mongo_url, serverSelectionTimeoutMS=20000)
+        db = client[db_name] if db_name else client.get_default_database()
+        existing_ids = {str(p.get("source_id")) for p in
+                        db.products.find({}, {"_id": 0, "source_id": 1}) if p.get("source_id")}
+        client.close()
+        print(f"Loaded {len(existing_ids)} existing source_ids to skip.")
+
     records = crawl_jewelry(
         since_date, args.limit, args.per_category_limit, args.per_brand_limit,
         args.max_images, args.delay, args.dry_run, session,
+        seeds=seeds, existing_ids=existing_ids,
     )
 
     print("-" * 80)

@@ -32,6 +32,12 @@ h1, h2, h3, h4, h5, h6 {
   color: #14110f;
 }
 
+/* Global heading color beats inherited text-white. Use this on titles
+   sitting on dark media (hero, category tiles) so names stay readable. */
+.on-media-title {
+  color: #ffffff !important;
+}
+
 /* Many components still set an inline `font-family: 'Playfair Display'`.
    Force the normal site font everywhere so typography stays consistent
    without having to edit every component. */

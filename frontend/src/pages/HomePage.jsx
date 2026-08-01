@@ -1,11 +1,12 @@
 import { useEffect, useState, useContext, useRef } from 'react';
-import { resolveImageUrl, buildCategoryTree, displayCategoryName } from '../lib/utils';
+import { resolveImageUrl, buildCategoryTree } from '../lib/utils';
 import { useSeo } from '../lib/seo';
-import { Link, useNavigate } from 'react-router-dom';
-import { ArrowRight, ShoppingBag, ChevronLeft, ChevronRight, Heart, Truck, ShieldCheck, Headphones, BadgeCheck } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight, ChevronLeft, ChevronRight, Heart, Truck, ShieldCheck, Headphones, BadgeCheck } from 'lucide-react';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
+import CategoryTiles from '../components/CategoryTiles';
 import Footer from '../components/Footer';
 import axios from 'axios';
 
@@ -37,28 +38,9 @@ const HomePage = () => {
         axios.get(`${API}/products/best-sellers?limit=12`)
       ]);
       setFeaturedProducts(productsRes.data.slice(0, 30));
-      // Show one card per MOTHER category (Bags, Shoes, Jewelry, Watches,
-      // Clothes, Accessories) using the same tree as the menu, so the homepage
-      // mirrors the organised navigation instead of listing every sub-category.
-      const tree = buildCategoryTree(categoriesRes.data || []);
-      const firstImage = (node) => {
-        if (node.image) return node.image;
-        for (const ch of node.children || []) {
-          const img = firstImage(ch);
-          if (img) return img;
-        }
-        return '';
-      };
-      setCategories(
-        tree.map((node) => ({
-          id: node.slug,
-          slug: node.slug,
-          name: displayCategoryName(node.name),
-          description: `${node.total} item${node.total === 1 ? '' : 's'}`,
-          image: firstImage(node),
-          total: node.total,
-        }))
-      );
+      // Same mother-category tree as the Categories menu. Clicking a tile
+      // opens /shop/<mother> where sub-categories are shown before products.
+      setCategories(buildCategoryTree(categoriesRes.data || []));
       
       // Ensure at least 3 best sellers are shown
       const sellers = bestSellersRes.data;
@@ -130,7 +112,7 @@ const HomePage = () => {
           <div className="max-w-4xl animate-fade-up">
             <p className="eyebrow text-gold-300 mb-5">Timeless Elegance</p>
             <h1
-              className="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight"
+              className="on-media-title text-5xl md:text-7xl font-bold mb-6 leading-tight"
               style={{ fontFamily: 'Playfair Display' }}
             >
               Luxury Watches <span className="text-gold-400">&</span> Fashion
@@ -181,7 +163,7 @@ const HomePage = () => {
         </div>
       </section>
 
-      {/* Shop by Category */}
+      {/* Shop by Category — mother categories; drill-down on Shop page */}
       <section className="py-20 bg-cream">
         <div className="container mx-auto px-4">
           <div className="flex flex-col items-center text-center mb-12">
@@ -192,39 +174,12 @@ const HomePage = () => {
             >
               Shop by Category
             </h2>
-            <div className="gold-divider" />
+            <div className="gold-divider mb-4" />
+            <p className="text-ink-muted text-base max-w-xl">
+              Choose a collection, then browse its sub-categories — the same structure as the menu.
+            </p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {categories.map((category) => (
-              <Link
-                key={category.id}
-                to={`/shop/${category.slug}`}
-                className="group relative overflow-hidden rounded-xl shadow-card ring-1 ring-black/5 hover:ring-gold-300 hover:shadow-luxe transition-all duration-300"
-              >
-                <div className="aspect-square overflow-hidden bg-gradient-to-br from-ink to-[#2a2520]">
-                  <img
-                    src={resolveImageUrl(category.image)}
-                    alt={category.name}
-                    loading="lazy"
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                    onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
-                  />
-                  {/* Always-dark overlay so the label stays readable even when a
-                      category has no image (mother categories aggregate). */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/10"></div>
-                  <div className="absolute bottom-0 left-0 right-0 p-4 pt-8 text-white bg-gradient-to-t from-black/80 via-black/55 to-transparent">
-                    <h3
-                      className="text-xl font-bold mb-1 drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)]"
-                      style={{ fontFamily: 'Playfair Display' }}
-                    >
-                      {category.name}
-                    </h3>
-                    <p className="text-sm text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]">{category.description}</p>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
+          <CategoryTiles nodes={categories} />
         </div>
       </section>
 

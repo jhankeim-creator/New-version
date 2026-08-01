@@ -147,3 +147,14 @@ export function buildCategoryTree(cats) {
   sortNodes(pruned);
   return pruned;
 }
+
+/** Find a node in a buildCategoryTree() result by slug. */
+export function findCategoryNode(nodes, slug) {
+  if (!slug || !Array.isArray(nodes)) return null;
+  for (const node of nodes) {
+    if (node.slug === slug) return node;
+    const found = findCategoryNode(node.children || [], slug);
+    if (found) return found;
+  }
+  return null;
+}

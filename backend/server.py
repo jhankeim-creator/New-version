@@ -2621,20 +2621,36 @@ async def robots():
 _cors_configured = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()]
 _cors_allow_all = "*" in _cors_configured
 
-# Explicit allow-list: CORS_ORIGINS, else FRONTEND_URL, else local dev.
+# Always include the production storefront domains so a custom domain
+# (kayee01.com) works even when Render env still lists only the old Vercel URL.
+_cors_builtin_origins = [
+    "https://kayee01.com",
+    "https://www.kayee01.com",
+    "https://new-version-eight.vercel.app",
+    "http://localhost:3000",
+]
+
+# Explicit allow-list: CORS_ORIGINS + builtins, else FRONTEND_URL, else local/prod builtins.
 _cors_allow_origins = (
     ["*"]
     if _cors_allow_all
-    else (_cors_configured or [os.environ.get("FRONTEND_URL", "http://localhost:3000")])
+    else list(
+        dict.fromkeys(
+            (_cors_configured or [os.environ.get("FRONTEND_URL", "")] + _cors_builtin_origins)
+        )
+    )
 )
+_cors_allow_origins = [o for o in _cors_allow_origins if o]
 
-# Always accept Vercel deployments (prod + previews), Render sites, and localhost dev,
-# even when CORS_ORIGINS/FRONTEND_URL are not explicitly set for them. This lets the
-# hosted frontend (e.g. *.vercel.app) reach the API without extra configuration.
+# Always accept Vercel deployments (prod + previews), Render sites, kayee01.com,
+# and localhost, even when CORS_ORIGINS/FRONTEND_URL are incomplete.
 _cors_allow_origin_regex = (
     None
     if _cors_allow_all
-    else r"https://([a-z0-9-]+\.)*(vercel\.app|onrender\.com)|http://localhost(:\d+)?"
+    else (
+        r"https://([a-z0-9-]+\.)*(vercel\.app|onrender\.com|kayee01\.com)"
+        r"|http://localhost(:\d+)?"
+    )
 )
 
 app.add_middleware(

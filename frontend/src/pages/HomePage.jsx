@@ -42,16 +42,8 @@ const HomePage = () => {
       // opens /shop/<mother> where sub-categories are shown before products.
       setCategories(buildCategoryTree(categoriesRes.data || []));
       
-      // Ensure at least 3 best sellers are shown
-      const sellers = bestSellersRes.data;
-      if (sellers.length < 3 && productsRes.data.length > 0) {
-        // Fill with featured products if not enough best sellers
-        const needed = 3 - sellers.length;
-        const featured = productsRes.data.slice(0, needed);
-        setBestSellers([...sellers, ...featured].slice(0, 12));
-      } else {
-        setBestSellers(sellers);
-      }
+      // Rotating best-sellers come from the API (daily / 8h shelf).
+      setBestSellers((bestSellersRes.data || []).slice(0, 12));
     } catch (error) {
       console.error('Failed to load data:', error);
     }

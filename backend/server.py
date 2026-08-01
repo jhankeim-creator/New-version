@@ -1017,31 +1017,129 @@ async def search_products(q: str, limit: int = 10):
     response_model=List[Product],
     response_model_exclude={"cost", "download_url", "barcode"},
 )
-async def get_best_sellers(limit: int = 10):
-    """Get best selling products based on order items"""
-    limit = max(1, min(int(limit or 10), PUBLIC_PRODUCT_PAGE_MAX))
-    # Aggregate orders to find most purchased products
-    pipeline = [
-        {"$unwind": "$items"},
-        {"$group": {
-            "_id": "$items.product_id",
-            "total_quantity": {"$sum": "$items.quantity"}
-        }},
-        {"$sort": {"total_quantity": -1}},
-        {"$limit": limit}
-    ]
-    
-    best_sellers = await db.orders.aggregate(pipeline).to_list(length=None)
-    product_ids = [bs["_id"] for bs in best_sellers]
-    
-    # Get products by IDs
-    if not product_ids:
-        # If no orders yet, return featured products
-        products = await db.products.find({"featured": True}, {"_id": 0}).limit(limit).to_list(length=None)
-    else:
-        products = await db.products.find({"id": {"$in": product_ids}}, {"_id": 0}).to_list(length=None)
-    
-    return [_product_response(parse_from_mongo(p)) for p in products]
+async def get_best_sellers(limit: int = 12):
+    """Rotating best-sellers for the homepage.
+
+    Combines real order volume with flagged / featured / popular products, then
+    rotates the selection on a daily (+ 8-hour slot) schedule so the shelf is
+    not stuck on the same few items when sales data is thin.
+    """
+    import random
+
+    limit = max(1, min(int(limit or 12), PUBLIC_PRODUCT_PAGE_MAX))
+    pool_target = max(limit * 5, 40)
+
+    # --- Score candidates from several signals ---
+    scores: dict = {}
+
+    def bump(pid: str, amount: float):
+        if not pid:
+            return
+        scores[pid] = scores.get(pid, 0.0) + amount
+
+    # 1) Actual order quantities (strongest signal)
+    try:
+        pipeline = [
+            {"$unwind": "$items"},
+            {"$group": {
+                "_id": "$items.product_id",
+                "total_quantity": {"$sum": "$items.quantity"},
+            }},
+            {"$sort": {"total_quantity": -1}},
+            {"$limit": pool_target},
+        ]
+        for row in await db.orders.aggregate(pipeline).to_list(length=pool_target):
+            bump(row.get("_id"), 100.0 + float(row.get("total_quantity") or 0) * 10.0)
+    except Exception:
+        pass
+
+    # 2) Explicit best_seller / featured / merchandising flags
+    flagged = await db.products.find(
+        {"$or": [
+            {"best_seller": True},
+            {"featured": True},
+            {"is_new": True},
+        ]},
+        {"_id": 0, "id": 1, "best_seller": 1, "featured": 1, "is_new": 1,
+         "sales_count": 1, "view_count": 1},
+    ).limit(pool_target).to_list(pool_target)
+    for p in flagged:
+        pid = p.get("id")
+        bump(pid, 40.0 if p.get("best_seller") else 0.0)
+        bump(pid, 25.0 if p.get("featured") else 0.0)
+        bump(pid, 15.0 if p.get("is_new") else 0.0)
+        bump(pid, float(p.get("sales_count") or 0) * 2.0)
+        bump(pid, float(p.get("view_count") or 0) * 0.05)
+
+    # 3) Top by recorded sales_count / view_count (fills thin order data)
+    popular = await db.products.find(
+        {},
+        {"_id": 0, "id": 1, "sales_count": 1, "view_count": 1, "featured": 1},
+    ).sort([("sales_count", -1), ("view_count", -1)]).limit(pool_target).to_list(pool_target)
+    for p in popular:
+        bump(p.get("id"), float(p.get("sales_count") or 0) * 3.0 + float(p.get("view_count") or 0) * 0.1)
+
+    if not scores:
+        # Absolute fallback: newest products
+        newest = await db.products.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+        return [_product_response(parse_from_mongo(p)) for p in newest]
+
+    # Rank by score, keep a wide pool so rotation has room to move
+    ranked_ids = [pid for pid, _s in sorted(scores.items(), key=lambda kv: kv[1], reverse=True)]
+    ranked_ids = ranked_ids[:pool_target]
+
+    products = await db.products.find(
+        {"id": {"$in": ranked_ids}},
+        {"_id": 0},
+    ).to_list(length=len(ranked_ids))
+    by_id = {p.get("id"): p for p in products}
+    ordered = [by_id[i] for i in ranked_ids if i in by_id]
+    if not ordered:
+        return []
+
+    # Daily rotation that also shifts every 8 hours → shelf changes often
+    # without flickering on every page load.
+    now = datetime.now(timezone.utc)
+    day = int(now.strftime("%Y%m%d"))
+    slot = now.hour // 8  # 0, 1, or 2
+    seed = day * 10 + slot
+    rng = random.Random(seed)
+
+    # Keep the top third as a "core" (real sellers), shuffle the rest in,
+    # then rotate the window so visitors see a fresh mix over time.
+    core_n = max(limit // 3, 2)
+    core = ordered[:core_n]
+    rest = ordered[core_n:]
+    rng.shuffle(rest)
+    mixed = core + rest
+
+    if len(mixed) <= limit:
+        # Still short: pad with random featured/new not already included
+        have = {p.get("id") for p in mixed}
+        pad = await db.products.find(
+            {"id": {"$nin": list(have)}, "featured": True},
+            {"_id": 0},
+        ).limit(limit * 2).to_list(limit * 2)
+        if len(pad) < limit:
+            more = await db.products.find(
+                {"id": {"$nin": list(have | {p.get("id") for p in pad})}},
+                {"_id": 0},
+            ).sort("created_at", -1).limit(limit).to_list(limit)
+            pad.extend(more)
+        rng.shuffle(pad)
+        mixed.extend(pad)
+
+    start = (seed * 3) % max(1, len(mixed))
+    rotated = mixed[start:] + mixed[:start]
+    selected = rotated[:limit]
+
+    # Mark as best_seller in the response only (does not write DB) so badges show
+    out = []
+    for p in selected:
+        doc = dict(p)
+        doc["best_seller"] = True
+        out.append(_product_response(parse_from_mongo(doc)))
+    return out
 
 
 @api_router.get(

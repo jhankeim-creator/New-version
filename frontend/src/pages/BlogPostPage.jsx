@@ -36,46 +36,66 @@ const BlogPostPage = () => {
   });
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="pt-32 pb-20">
+    <div className="min-h-screen bg-[#f7f4ef]">
+      <div className="pt-28 pb-24">
         <div className="container mx-auto px-4 max-w-3xl">
-          <Link to="/blog" className="inline-flex items-center text-sm text-ink-muted hover:text-gold-600 mb-8">
-            <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to Journal
+          <Link
+            to="/blog"
+            className="inline-flex items-center text-sm text-[#5c534a] hover:text-[#1a1612] mb-10"
+          >
+            <ArrowLeft className="mr-1.5 h-4 w-4" /> All journal notes
           </Link>
 
           {loading ? (
             <div className="text-center py-20">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gold-500"></div>
+              <div className="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-[#8a7355]" />
             </div>
           ) : !post ? (
-            <div className="text-center py-20 text-ink-muted">Article not found.</div>
+            <div className="text-center py-20 text-[#5c534a]">Article not found.</div>
           ) : (
             <article>
-              <p className="eyebrow mb-3">Editorial</p>
-              <h1 className="text-3xl md:text-5xl font-bold mb-4 leading-tight" style={{ fontFamily: 'Playfair Display' }}>
+              <p className="text-xs tracking-[0.22em] uppercase text-[#8a7355] mb-4">Editorial</p>
+              <h1
+                className="text-3xl md:text-5xl text-[#1a1612] mb-5 leading-[1.15]"
+                style={{ fontFamily: 'Playfair Display, Georgia, serif' }}
+              >
                 {post.title}
               </h1>
-              <p className="flex items-center gap-2 text-sm text-gold-600 mb-8">
+              <p className="flex items-center gap-2 text-sm text-[#8a7355] mb-10">
                 <CalendarDays className="h-4 w-4" />
                 {post.date_label || ''} · {post.author || 'Kayee01 Editorial'}
               </p>
+
               {post.cover_image && (
-                <div className="rounded-xl overflow-hidden mb-10 shadow-card">
-                  <img src={resolveImageUrl(post.cover_image)} alt={post.title} className="w-full object-cover" />
-                </div>
+                <figure className="mb-12 -mx-4 md:mx-0">
+                  <img
+                    src={resolveImageUrl(post.cover_image)}
+                    alt={post.title}
+                    className="w-full max-h-[520px] object-cover"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = '/placeholder.svg';
+                    }}
+                  />
+                </figure>
               )}
+
               <div
                 className="blog-content"
                 dangerouslySetInnerHTML={{ __html: post.content || '' }}
               />
-              <div className="mt-12 pt-8 border-t border-gold-100 text-center">
+
+              <footer className="mt-16 pt-8 border-t border-[#ddd4c6]">
+                <p className="text-[#5c534a] text-sm mb-4">
+                  Looking for something specific? Explore the full collection at your own pace.
+                </p>
                 <Link
                   to="/shop"
-                  className="btn-gold inline-flex items-center rounded-full px-8 py-3 text-white font-medium"
+                  className="inline-flex text-sm tracking-wide text-[#1a1612] border-b border-[#1a1612] pb-0.5 hover:text-[#8a7355] hover:border-[#8a7355] transition-colors"
                 >
-                  Shop the Collection
+                  Browse the shop
                 </Link>
-              </div>
+              </footer>
             </article>
           )}
         </div>

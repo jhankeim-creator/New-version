@@ -95,23 +95,80 @@ h1, h2, h3, h4, h5, h6 {
 .btn-gold:hover { filter: brightness(1.05); }
 
 /* Blog article typography */
-.blog-content { color: #26221f; font-size: 1.05rem; line-height: 1.8; }
+.blog-content {
+  color: #2c2620;
+  font-size: 1.125rem;
+  line-height: 1.85;
+  font-family: Georgia, "Times New Roman", serif;
+}
+.blog-content .blog-lede {
+  font-size: 1.25rem;
+  line-height: 1.7;
+  color: #3d362f;
+  margin-bottom: 1.75rem;
+}
 .blog-content h2 {
-  font-family: var(--font-sans);
-  font-size: 1.6rem;
-  margin: 2rem 0 0.75rem;
-  color: #14110f;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.65rem;
+  font-weight: 600;
+  margin: 0.35rem 0 0.85rem;
+  color: #1a1612;
+  letter-spacing: -0.01em;
 }
-.blog-content p { margin-bottom: 1.1rem; }
-.blog-content strong { color: #14110f; }
 .blog-content h3 {
-  font-family: var(--font-sans);
-  font-size: 1.2rem;
-  margin: 1.4rem 0 0.35rem;
-  color: #14110f;
+  font-family: "Playfair Display", Georgia, serif;
+  font-size: 1.35rem;
+  margin: 1.6rem 0 0.5rem;
+  color: #1a1612;
 }
+.blog-content p { margin-bottom: 1.15rem; }
+.blog-content strong { color: #1a1612; font-weight: 600; }
+.blog-content em { font-style: italic; }
 .blog-content ul { margin: 0.5rem 0 1.2rem; padding-left: 1.25rem; list-style: disc; }
 .blog-content li { margin-bottom: 0.4rem; }
+.blog-content .blog-piece { margin: 2.25rem 0; }
+.blog-content .blog-figure {
+  margin: 0 0 1.25rem;
+  background: #ebe4d8;
+}
+.blog-content .blog-figure img {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: cover;
+}
+.blog-content .blog-figure figcaption {
+  font-family: system-ui, sans-serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #8a7355;
+  padding: 0.65rem 0 0;
+}
+.blog-content .blog-rule {
+  border: 0;
+  border-top: 1px solid #ddd4c6;
+  margin: 2.5rem 0;
+}
+.blog-content .blog-inline-link a,
+.blog-content a {
+  color: #1a1612;
+  text-decoration: none;
+  border-bottom: 1px solid #1a1612;
+  font-family: system-ui, sans-serif;
+  font-size: 0.92rem;
+  letter-spacing: 0.02em;
+}
+.blog-content .blog-inline-link a:hover,
+.blog-content a:hover {
+  color: #8a7355;
+  border-color: #8a7355;
+}
+.blog-content .blog-closer {
+  margin-top: 2.5rem;
+  color: #5c534a;
+  font-style: italic;
+}
 
 /* Smooth transitions */
 button, a, input, select, textarea {

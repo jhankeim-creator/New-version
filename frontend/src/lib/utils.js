@@ -13,9 +13,18 @@ const BACKEND_URL = (process.env.REACT_APP_BACKEND_URL || "").replace(/\/$/, "")
 // prefixed with the backend URL. Absolute URLs and data URIs pass through.
 export function resolveImageUrl(path, fallback = "/placeholder.svg") {
   if (!path || typeof path !== "string") return fallback;
-  if (/^(https?:)?\/\//i.test(path) || path.startsWith("data:")) return path;
-  if (path.startsWith("/uploads")) return `${BACKEND_URL}${path}`;
-  return path;
+  const trimmed = path.trim();
+  if (!trimmed || /does-not-exist/i.test(trimmed)) return fallback;
+  if (/^(https?:)?\/\//i.test(trimmed) || trimmed.startsWith("data:")) {
+    // Normalize protocol-relative URLs
+    if (trimmed.startsWith("//")) return `https:${trimmed}`;
+    return trimmed;
+  }
+  if (trimmed.startsWith("/uploads")) {
+    if (!BACKEND_URL) return fallback;
+    return `${BACKEND_URL}${trimmed}`;
+  }
+  return trimmed;
 }
 
 // Top ("All X") parent categories and how leaf categories map to them. Used to

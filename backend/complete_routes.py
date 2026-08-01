@@ -88,7 +88,7 @@ class ProductCreateV2(BaseModel):
 # ==================== MEDIA UPLOAD ====================
 
 @complete_router.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(file: UploadFile = File(...), admin: User = Depends(get_current_admin)):
     """Upload image or video"""
     # Validate file type
     allowed = ["image/jpeg", "image/png", "image/gif", "image/webp", "video/mp4"]
@@ -136,7 +136,7 @@ async def upload_file(file: UploadFile = File(...)):
     return {"url": media["url"], "id": media["id"], "type": media["type"]}
 
 @complete_router.get("/media")
-async def get_media():
+async def get_media(admin: User = Depends(get_current_admin)):
     """Get all uploaded media"""
     media = await db.media.find({}, {"_id": 0}).sort("created_at", -1).limit(100).to_list(100)
     return media
@@ -228,7 +228,7 @@ async def get_product_reviews(product_id: str):
     return reviews
 
 @complete_router.get("/reviews/pending")
-async def get_pending_reviews():
+async def get_pending_reviews(admin: User = Depends(get_current_admin)):
     """Get pending reviews"""
     reviews = await db.reviews.find({"status": "pending"}, {"_id": 0}).to_list(None)
     return reviews
@@ -323,7 +323,7 @@ async def create_product_v2(product: ProductCreateV2, admin: User = Depends(get_
     return product_doc
 
 @complete_router.get("/products")
-async def list_products_v2(limit: int = 100):
+async def list_products_v2(limit: int = 100, admin: User = Depends(get_current_admin)):
     """Admin helper endpoint to list products (for V2 UIs)."""
     limit = max(1, min(limit, 500))
     return await db.products.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)

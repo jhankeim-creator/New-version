@@ -52,10 +52,31 @@ function extractLabeledClauses(description) {
  */
 function sizesFromSzToken(description) {
   if (!description) return [];
-  const m = description.match(/\bsz\s*(\d{2}\s*[-–—]\s*\d{2})\b/i);
-  if (!m) return [];
-  const values = expandSizeToken(m[1]);
-  return values.length >= 2 ? values : [];
+  // sz38-45, sz38-44CRQ… (code glued on), sz3845
+  let m = description.match(/\bsz\s*(\d{2})\s*[-–—]\s*(\d{2})(?=[A-Za-z_]|\b)/i);
+  if (m) {
+    const values = expandSizeToken(`${m[1]}-${m[2]}`);
+    if (values.length >= 2) return values;
+  }
+  m = description.match(/\bsz\s*(\d{2})(\d{2})(?=[A-Za-z_]|\b)/i);
+  if (m) {
+    const values = expandSizeToken(`${m[1]}-${m[2]}`);
+    if (values.length >= 2) return values;
+  }
+  // women36-40 Man39-48 → one continuous Size list
+  m = description.match(
+    /\b(?:women|wm|w)\s*(\d{2})\s*[-–—]\s*(\d{2})\b.*?\b(?:men|man|m)\s*(\d{2})\s*[-–—]\s*(\d{2})\b/i
+  ) || description.match(
+    /\b(?:men|man|m)\s*(\d{2})\s*[-–—]\s*(\d{2})\b.*?\b(?:women|wm|w)\s*(\d{2})\s*[-–—]\s*(\d{2})\b/i
+  );
+  if (m) {
+    const nums = m.slice(1).map(Number).filter((n) => !Number.isNaN(n));
+    if (nums.length >= 2) {
+      const values = expandSizeToken(`${Math.min(...nums)}-${Math.max(...nums)}`);
+      if (values.length >= 2) return values;
+    }
+  }
+  return [];
 }
 
 /**

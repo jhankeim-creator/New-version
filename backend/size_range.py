@@ -4,7 +4,8 @@ Examples:
   S-2XL   -> ["S", "M", "L", "XL", "2XL"]
   M-3XL   -> ["M", "L", "XL", "2XL", "3XL"]
   39-45   -> ["39", "40", ..., "45"]
-  sz38-45 -> ["38", "39", ..., "45"]
+  sz38-45 -> ["38", ..., "45"]
+  sz38-44CRQ… / sz3845 / women36-40 Man39-48
 """
 from __future__ import annotations
 
@@ -20,7 +21,17 @@ _ALPHA_RANGE = re.compile(
 )
 _NUM_RANGE = re.compile(r"^(\d{2})\s*[-–—]\s*(\d{2})$")
 _SIZE_LABEL = re.compile(r"Sizes?\s*[:：]\s*([^.\n\r]+)", re.I)
-_SZ_TOKEN = re.compile(r"\bsz\s*(\d{2}\s*[-–—]\s*\d{2})\b", re.I)
+# sz38-45, sz38-44CRQ… (code glued), sz3845 (no dash)
+_SZ_TOKEN = re.compile(
+    r"\bsz\s*(?:(\d{2})\s*[-–—]\s*(\d{2})|(\d{2})(\d{2}))(?=[A-Za-z_]|\b)",
+    re.I,
+)
+_WOMEN_MEN = re.compile(
+    r"\b(?:women|wm|w)\s*(\d{2})\s*[-–—]\s*(\d{2})\b.*?\b(?:men|man|m)\s*(\d{2})\s*[-–—]\s*(\d{2})\b"
+    r"|\b(?:men|man|m)\s*(\d{2})\s*[-–—]\s*(\d{2})\b.*?\b(?:women|wm|w)\s*(\d{2})\s*[-–—]\s*(\d{2})\b"
+    r"|\b(?:women|wm|w|men|man)\s*(\d{2})\s*[-–—]\s*(\d{2})\b",
+    re.I,
+)
 
 
 def _norm_alpha(token: str) -> str:
@@ -44,9 +55,13 @@ def expand_size_token(raw: str) -> List[str]:
     if not text:
         return []
 
-    m_sz = re.match(r"^sz\s*(\d{2}\s*[-–—]\s*\d{2})$", text, re.I)
+    m_sz = re.match(r"^sz\s*(\d{2}\s*[-–—]\s*\d{2}|\d{4})$", text, re.I)
     if m_sz:
-        text = m_sz.group(1)
+        inner = m_sz.group(1)
+        if re.fullmatch(r"\d{4}", inner):
+            text = f"{inner[:2]}-{inner[2:]}"
+        else:
+            text = inner
 
     if re.search(r"[,/|、，]", text):
         parts = [p.strip() for p in re.split(r"\s*[,/|、，]\s*", text) if p.strip()]
@@ -75,6 +90,15 @@ def expand_size_token(raw: str) -> List[str]:
     return []
 
 
+def _numeric_span(lo: int, hi: int) -> List[str]:
+    if 20 <= lo <= hi <= 60 and hi - lo <= 20:
+        return [str(n) for n in range(lo, hi + 1)]
+    # Allow slightly wider for women+men combined shoe charts (e.g. 36-48).
+    if 30 <= lo <= hi <= 50 and hi - lo <= 18:
+        return [str(n) for n in range(lo, hi + 1)]
+    return []
+
+
 def size_variants_from_text(*texts: str) -> List[dict]:
     """Build a structured Size variants list from free text (description/title)."""
     for text in texts:
@@ -82,19 +106,38 @@ def size_variants_from_text(*texts: str) -> List[dict]:
             continue
         m = _SIZE_LABEL.search(text)
         token = m.group(1).strip() if m else ""
-        if not token:
-            m_sz = _SZ_TOKEN.search(text)
-            if m_sz:
-                token = m_sz.group(1)
-        if not token:
-            m2 = re.search(
-                r"\b((?:XXS|XS|S|M|L|XL|XXL|\dXL)\s*[-–—]\s*(?:XXS|XS|S|M|L|XL|XXL|\dXL)"
-                r"|\d{2}\s*[-–—]\s*\d{2})\b",
-                text,
-                re.I,
-            )
-            token = m2.group(1) if m2 else ""
-        values = expand_size_token(token)
-        if len(values) >= 2:
-            return [{"name": "Size", "values": values}]
+        if token:
+            values = expand_size_token(token)
+            if len(values) >= 2:
+                return [{"name": "Size", "values": values}]
+
+        m_sz = _SZ_TOKEN.search(text)
+        if m_sz:
+            if m_sz.group(1) and m_sz.group(2):
+                token = f"{m_sz.group(1)}-{m_sz.group(2)}"
+            else:
+                token = f"{m_sz.group(3)}-{m_sz.group(4)}"
+            values = expand_size_token(token)
+            if len(values) >= 2:
+                return [{"name": "Size", "values": values}]
+
+        m_wm = _WOMEN_MEN.search(text)
+        if m_wm:
+            nums = [int(x) for x in m_wm.groups() if x]
+            if len(nums) >= 2:
+                lo, hi = min(nums), max(nums)
+                values = _numeric_span(lo, hi)
+                if len(values) >= 2:
+                    return [{"name": "Size", "values": values}]
+
+        m2 = re.search(
+            r"\b((?:XXS|XS|S|M|L|XL|XXL|\dXL)\s*[-–—]\s*(?:XXS|XS|S|M|L|XL|XXL|\dXL)"
+            r"|\d{2}\s*[-–—]\s*\d{2})\b",
+            text,
+            re.I,
+        )
+        if m2:
+            values = expand_size_token(m2.group(1))
+            if len(values) >= 2:
+                return [{"name": "Size", "values": values}]
     return []

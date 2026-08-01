@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Edit, Trash2, Plus, Copy, Search, Package, LayoutGrid, Upload } from 'lucide-react';
+import { Edit, Trash2, Plus, Copy, Search, Package, LayoutGrid, Upload, ImageOff } from 'lucide-react';
 import ProductVariants from './ProductVariants';
 
 const AdminProducts = () => {
@@ -26,6 +26,7 @@ const AdminProducts = () => {
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkCategory, setBulkCategory] = useState('');
+  const [scanningBroken, setScanningBroken] = useState(false);
   const perPage = 24;
   const [formData, setFormData] = useState({
     name: '',
@@ -77,7 +78,9 @@ const AdminProducts = () => {
   const loadData = async () => {
     try {
       const [productsRes, categoriesRes] = await Promise.all([
-        axios.get(`${API}/products`),
+        // limit=0 returns every product (not just the first 100) and
+        // sort=popular surfaces featured / best-selling products first.
+        axios.get(`${API}/products?limit=0&sort=popular`),
         axios.get(`${API}/categories`)
       ]);
       setProducts(productsRes.data);
@@ -87,6 +90,37 @@ const AdminProducts = () => {
       toast.error('Failed to load products');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const scanBrokenImages = async () => {
+    setScanningBroken(true);
+    try {
+      const dry = await axios.post(
+        `${API}/products/maintenance/broken-images?apply=false`,
+        {},
+        { headers: authHeaders() }
+      );
+      const count = dry.data?.broken_count || 0;
+      if (count === 0) {
+        toast.success('No products with broken images found');
+        return;
+      }
+      if (!window.confirm(`Found ${count} product(s) whose images are all broken. Delete them permanently?`)) {
+        return;
+      }
+      const res = await axios.post(
+        `${API}/products/maintenance/broken-images?apply=true`,
+        {},
+        { headers: authHeaders() }
+      );
+      toast.success(`Deleted ${res.data?.deleted || 0} product(s) with broken images`);
+      await loadData();
+    } catch (err) {
+      console.error('Broken image scan failed:', err);
+      toast.error('Broken image scan failed');
+    } finally {
+      setScanningBroken(false);
     }
   };
 
@@ -284,17 +318,28 @@ const AdminProducts = () => {
             {products.length} products across {orderedCategories.length} categories
           </p>
         </div>
-        <Button
-          onClick={() => {
-            resetForm();
-            setShowDialog(true);
-          }}
-          className="btn-gold text-white"
-          data-testid="add-product-button"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Product
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={scanBrokenImages}
+            variant="outline"
+            disabled={scanningBroken}
+            data-testid="scan-broken-images-button"
+          >
+            <ImageOff className="mr-2 h-4 w-4" />
+            {scanningBroken ? 'Scanning…' : 'Remove broken images'}
+          </Button>
+          <Button
+            onClick={() => {
+              resetForm();
+              setShowDialog(true);
+            }}
+            className="btn-gold text-white"
+            data-testid="add-product-button"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Product
+          </Button>
+        </div>
       </div>
 
       {/* Search */}

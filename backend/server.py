@@ -771,11 +771,11 @@ async def get_products(
     tags: Optional[str] = None,  # Comma-separated tags
     min_price: Optional[float] = None,
     max_price: Optional[float] = None,
-    sort: Optional[str] = None,  # featured, price_asc, price_desc, newest
-    sort_by: Optional[str] = "created_at",  # price, name, created_at, sales_count
+    sort: Optional[str] = None,  # featured, price_asc, price_desc, newest, popular
+    sort_by: Optional[str] = "created_at",  # price, name, created_at, sales_count, popularity
     sort_order: Optional[str] = "desc",  # asc or desc
     skip: int = 0,
-    limit: int = 100
+    limit: int = 100  # 0 (or negative) returns every matching product
 ):
     query = {}
     if category:
@@ -812,10 +812,30 @@ async def get_products(
             sort_by, sort_order = "created_at", "desc"
         elif sort == "featured":
             sort_by, sort_order = "featured", "desc"
-    
+        elif sort in ("popular", "popularity", "best"):
+            sort_by = "popularity"
+
     sort_direction = -1 if sort_order == "desc" else 1
-    
-    products = await db.products.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(limit).to_list(limit)
+
+    # "popularity" is a composite ranking: featured products first, then the
+    # best sellers (by recorded sales), then the most viewed, newest last. This
+    # surfaces the most popular products at the top of storefront and admin lists.
+    if sort_by == "popularity":
+        sort_spec = [
+            ("featured", -1),
+            ("sales_count", -1),
+            ("view_count", -1),
+            ("created_at", -1),
+        ]
+    else:
+        sort_spec = [(sort_by, sort_direction)]
+
+    cursor = db.products.find(query, {"_id": 0}).sort(sort_spec).skip(max(skip, 0))
+    # limit <= 0 means "return everything" (used by the admin panel so every
+    # product is manageable, not just the first page).
+    if limit and limit > 0:
+        cursor = cursor.limit(limit)
+    products = await cursor.to_list(length=(limit if limit and limit > 0 else None))
     for prod in products:
         parse_from_mongo(prod)
     return [Product(**prod) for prod in products]
@@ -963,6 +983,111 @@ async def delete_product(product_id: str, admin: User = Depends(get_current_admi
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
     return {"message": "Product deleted successfully"}
+
+
+_BROKEN_IMG_UA = (
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 "
+    "(KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
+)
+
+
+def _image_reachable(url: str, timeout: float) -> bool:
+    """Return True when an image URL is reachable/valid.
+
+    Conservative on purpose so we never delete a product because of a transient
+    hiccup: only a definitive HTTP error (>=400) or a hard connection/DNS error
+    marks an image broken. Timeouts are treated as "keep" and locally-served
+    relative paths / data URIs are always considered valid.
+    """
+    import requests
+
+    if not url or not isinstance(url, str):
+        return False
+    u = url.strip()
+    if not u:
+        return False
+    if u.startswith("data:"):
+        return True
+    if not u.startswith("http"):
+        # Relative path served by our own backend (e.g. /uploads/..).
+        return True
+    try:
+        resp = requests.get(
+            u, timeout=timeout, stream=True, allow_redirects=True,
+            headers={"User-Agent": _BROKEN_IMG_UA},
+        )
+        code = resp.status_code
+        resp.close()
+        return code < 400
+    except requests.exceptions.Timeout:
+        return True
+    except Exception:
+        return False
+
+
+@api_router.post("/products/maintenance/broken-images")
+async def prune_broken_image_products(
+    apply: bool = False,
+    timeout: float = 15.0,
+    max_workers: int = 16,
+    limit: int = 0,
+    admin: User = Depends(get_current_admin),
+):
+    """Find (and optionally delete) products whose images are all broken.
+
+    A product is flagged only when it has no images at all, or when *every*
+    image URL is unreachable. Pass ``apply=true`` to actually delete the flagged
+    products; otherwise this is a safe dry-run that just reports them.
+    """
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+
+    cursor = db.products.find({}, {"_id": 0, "id": 1, "name": 1, "images": 1})
+    if limit and limit > 0:
+        cursor = cursor.limit(limit)
+    products = await cursor.to_list(length=(limit if limit and limit > 0 else None))
+
+    # Dedupe image URLs so each unique URL is only fetched once.
+    unique_urls = set()
+    for p in products:
+        for img in (p.get("images") or []):
+            if isinstance(img, str) and img.strip():
+                unique_urls.add(img.strip())
+
+    timeout = max(1.0, min(float(timeout), 30.0))
+    max_workers = max(1, min(int(max_workers), 32))
+    loop = asyncio.get_event_loop()
+    reachable: dict[str, bool] = {}
+    if unique_urls:
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            urls = list(unique_urls)
+            results = await asyncio.gather(*[
+                loop.run_in_executor(pool, _image_reachable, u, timeout) for u in urls
+            ])
+        reachable = dict(zip(urls, results))
+
+    broken = []
+    for p in products:
+        imgs = [i.strip() for i in (p.get("images") or []) if isinstance(i, str) and i.strip()]
+        if not imgs or all(not reachable.get(i, False) for i in imgs):
+            broken.append({"id": p.get("id"), "name": p.get("name"), "images": p.get("images") or []})
+
+    deleted = 0
+    if apply and broken:
+        ids = [b["id"] for b in broken if b.get("id")]
+        if ids:
+            res = await db.products.delete_many({"id": {"$in": ids}})
+            deleted = res.deleted_count
+
+    return {
+        "checked": len(products),
+        "images_checked": len(unique_urls),
+        "broken_count": len(broken),
+        "deleted": deleted,
+        "applied": bool(apply),
+        "broken": broken[:500],
+    }
+
 
 # ===== ORDER ROUTES =====
 

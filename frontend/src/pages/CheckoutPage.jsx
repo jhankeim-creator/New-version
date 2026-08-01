@@ -293,30 +293,36 @@ const CheckoutPage = () => {
                         onValueChange={setShippingMethod}
                         data-testid="shipping-method-selector"
                       >
-                        {shippingMethods.map((method) => (
-                          <div
-                            key={method.id}
-                            className="flex items-start space-x-3 p-3 sm:p-4 border rounded-lg cursor-pointer hover:bg-gray-50"
-                            onClick={() => setShippingMethod(method.id)}
-                          >
-                            <RadioGroupItem value={method.id} id={`ship-${method.id}`} />
-                            <div className="flex-1 min-w-0">
-                              <Label htmlFor={`ship-${method.id}`} className="cursor-pointer">
+                        {shippingMethods.map((method) => {
+                          const isSelected = shippingMethod === method.id;
+                          return (
+                            <label
+                              key={method.id}
+                              htmlFor={`ship-${method.id}`}
+                              className={`flex items-start space-x-3 p-3 sm:p-4 border rounded-lg cursor-pointer transition-colors ${
+                                isSelected
+                                  ? 'border-[#d4af37] bg-[#fbf7ec] ring-1 ring-[#d4af37]'
+                                  : 'border-gray-200 hover:bg-gray-50'
+                              }`}
+                              data-testid={`shipping-option-${method.id}`}
+                            >
+                              <RadioGroupItem value={method.id} id={`ship-${method.id}`} className="mt-1" />
+                              <div className="flex-1 min-w-0">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="font-semibold break-words">{method.name}</span>
                                   <span className="text-[#d4af37] font-bold whitespace-nowrap">
                                     {Number(method.cost) > 0 ? `$${Number(method.cost).toFixed(2)}` : 'FREE'}
                                   </span>
                                 </div>
-                              </Label>
-                              {(method.description || method.estimated_days) && (
-                                <p className="text-sm text-gray-600 mt-1 break-words">
-                                  {method.description || `Delivery in ${method.estimated_days}`}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+                                {(method.description || method.estimated_days) && (
+                                  <p className="text-sm text-gray-600 mt-1 break-words">
+                                    {method.description || `Delivery in ${method.estimated_days}`}
+                                  </p>
+                                )}
+                              </div>
+                            </label>
+                          );
+                        })}
                       </RadioGroup>
                     )}
                   </CardContent>
@@ -333,28 +339,36 @@ const CheckoutPage = () => {
                       onValueChange={(value) => setFormData({ ...formData, paymentMethod: value })}
                       data-testid="payment-method-selector"
                     >
-                      {allPaymentMethods.map((method) => (
-                        <div
-                          key={method.id}
-                          className="flex items-start space-x-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50"
-                          onClick={() => setFormData({ ...formData, paymentMethod: method.id })}
-                        >
-                          <RadioGroupItem value={method.id} id={method.id} />
-                          <div className="flex-1">
-                            <Label htmlFor={method.id} className="flex items-center cursor-pointer">
-                              <method.icon className="h-5 w-5 mr-2 text-[#d4af37]" />
-                              <span className="font-semibold">{method.name}</span>
-                              {method.discount && (
-                                <span className="ml-2 px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded">
-                                  {method.discount}
-                                </span>
-                              )}
-                            </Label>
-                            <p className="text-sm text-gray-600 mt-1">{method.description}</p>
-                            {/* Instructions removed - will be sent by email only */}
-                          </div>
-                        </div>
-                      ))}
+                      {allPaymentMethods.map((method) => {
+                        const isSelected = formData.paymentMethod === method.id;
+                        return (
+                          <label
+                            key={method.id}
+                            htmlFor={`pay-${method.id}`}
+                            className={`flex items-start space-x-3 p-4 border rounded-lg cursor-pointer transition-colors ${
+                              isSelected
+                                ? 'border-[#d4af37] bg-[#fbf7ec] ring-1 ring-[#d4af37]'
+                                : 'border-gray-200 hover:bg-gray-50'
+                            }`}
+                            data-testid={`payment-option-${method.id}`}
+                          >
+                            <RadioGroupItem value={method.id} id={`pay-${method.id}`} className="mt-1" />
+                            <div className="flex-1">
+                              <div className="flex items-center">
+                                <method.icon className="h-5 w-5 mr-2 text-[#d4af37]" />
+                                <span className="font-semibold">{method.name}</span>
+                                {method.discount && (
+                                  <span className="ml-2 px-2 py-1 bg-green-100 text-green-700 text-xs font-bold rounded">
+                                    {method.discount}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-gray-600 mt-1">{method.description}</p>
+                              {/* Instructions removed - will be sent by email only */}
+                            </div>
+                          </label>
+                        );
+                      })}
                     </RadioGroup>
                     <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                       <p className="text-sm text-yellow-800">

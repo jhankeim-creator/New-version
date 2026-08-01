@@ -2543,11 +2543,14 @@ app.include_router(blog_router)
 # ===== SEO: sitemap.xml & robots.txt =====
 
 def _public_base_url() -> str:
-    """Canonical public storefront URL for sitemap/robots (Google Search Console)."""
-    for key in ("PUBLIC_SITE_URL", "FRONTEND_URL", "SITE_URL"):
-        url = (os.environ.get(key) or "").strip().rstrip("/")
-        if url:
-            return url
+    """Canonical storefront URL for sitemap/robots (Google Search Console).
+
+    Prefer PUBLIC_SITE_URL when set. Do NOT use FRONTEND_URL here — that env
+    often points at a Vercel preview deployment and would poison the sitemap.
+    """
+    url = (os.environ.get("PUBLIC_SITE_URL") or "").strip().rstrip("/")
+    if url:
+        return url
     return "https://kayee01.com"
 
 

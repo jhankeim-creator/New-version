@@ -11,7 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import Footer from '../components/Footer';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { User, Package, Heart, MessageCircle, Mail, Phone, MapPin, Calendar, LogOut, ShoppingBag, Clock, Star, TrendingUp } from 'lucide-react';
+import { User, Package, Heart, MessageCircle, Mail, Phone, MapPin, Calendar, LogOut, ShoppingBag, Clock, Star, TrendingUp, LayoutDashboard, ArrowRight } from 'lucide-react';
 
 const AccountPage = () => {
   const { user, token, API, setUser, setToken, logout } = useContext(CartContext);
@@ -210,8 +210,15 @@ const AccountPage = () => {
           </div>
 
           {/* Mobile-Optimized Tabs */}
-          <Tabs defaultValue="profile" className="space-y-4 md:space-y-6">
-            <TabsList className="grid grid-cols-4 gap-1 md:gap-2 bg-white p-1.5 md:p-2 rounded-lg md:rounded-xl shadow-md w-full overflow-x-auto">
+          <Tabs defaultValue="overview" className="space-y-4 md:space-y-6">
+            <TabsList className="grid grid-cols-5 gap-1 md:gap-2 bg-white p-1.5 md:p-2 rounded-lg md:rounded-xl shadow-md w-full overflow-x-auto">
+              <TabsTrigger
+                value="overview"
+                className="flex flex-col items-center justify-center gap-1 md:gap-2 py-2 md:py-4 px-1 data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#d4af37] data-[state=active]:to-[#b8941f] data-[state=active]:text-white rounded-md md:rounded-lg transition-all min-w-0"
+              >
+                <LayoutDashboard className="h-4 w-4 md:h-5 md:w-5 flex-shrink-0" />
+                <span className="text-xs md:text-sm font-medium truncate w-full text-center">Overview</span>
+              </TabsTrigger>
               <TabsTrigger 
                 value="profile" 
                 className="flex flex-col items-center justify-center gap-1 md:gap-2 py-2 md:py-4 px-1 data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#d4af37] data-[state=active]:to-[#b8941f] data-[state=active]:text-white rounded-md md:rounded-lg transition-all min-w-0"
@@ -247,6 +254,112 @@ const AccountPage = () => {
                 <span className="text-xs md:text-sm font-medium truncate w-full text-center">Support</span>
               </TabsTrigger>
             </TabsList>
+
+            {/* Overview Tab */}
+            <TabsContent value="overview">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+                {/* Recent Orders */}
+                <Card className="shadow-lg border-0 lg:col-span-2">
+                  <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Clock className="h-5 w-5 text-[#d4af37]" />
+                        Recent Orders
+                      </CardTitle>
+                      <CardDescription>Your latest purchases at a glance</CardDescription>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-6">
+                    {orders.length === 0 ? (
+                      <div className="text-center py-10">
+                        <Package className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                        <p className="text-gray-600 mb-4">You haven't placed any orders yet.</p>
+                        <Button onClick={() => navigate('/shop')} className="bg-[#d4af37] hover:bg-[#b8941f]">
+                          Start Shopping
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {orders.slice(0, 4).map((order) => (
+                          <div
+                            key={order.id}
+                            className="flex items-center justify-between gap-3 border rounded-lg p-3 hover:shadow-md transition-shadow cursor-pointer"
+                            onClick={() => navigate(`/track-order?order=${order.order_number}`)}
+                          >
+                            <div className="min-w-0">
+                              <p className="font-semibold truncate">{order.order_number}</p>
+                              <p className="text-xs text-gray-500">
+                                {new Date(order.created_at).toLocaleDateString()} • {order.items.length} item(s)
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              <span className={`px-2.5 py-1 rounded text-xs font-medium ${
+                                order.status === 'completed' || order.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                                order.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {order.status}
+                              </span>
+                              <span className="font-bold text-[#d4af37]">${order.total.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Quick actions + wishlist preview */}
+                <div className="space-y-4 md:space-y-6">
+                  <Card className="shadow-lg border-0">
+                    <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+                      <CardTitle className="text-lg">Quick Actions</CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-4 space-y-2">
+                      <Button variant="outline" className="w-full justify-between" onClick={() => navigate('/shop')}>
+                        Continue Shopping <ArrowRight className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" className="w-full justify-between" onClick={() => navigate('/track-order')}>
+                        Track an Order <ArrowRight className="h-4 w-4" />
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="shadow-lg border-0">
+                    <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Heart className="h-4 w-4 text-pink-600" /> Wishlist
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-4">
+                      {wishlist.length === 0 ? (
+                        <p className="text-sm text-gray-500">No saved items yet.</p>
+                      ) : (
+                        <div className="space-y-3">
+                          {wishlist.slice(0, 3).map((item) => (
+                            <div
+                              key={item.product_id}
+                              className="flex items-center gap-3 cursor-pointer"
+                              onClick={() => navigate(`/product/${item.product_id}`)}
+                            >
+                              <img
+                                src={resolveImageUrl(item.product_image)}
+                                alt={item.product_name}
+                                className="w-12 h-12 rounded object-cover flex-shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium truncate">{item.product_name}</p>
+                                <p className="text-sm text-[#d4af37] font-bold">${item.product_price.toFixed(2)}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            </TabsContent>
 
             {/* Profile Tab */}
             <TabsContent value="profile">

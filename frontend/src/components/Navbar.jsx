@@ -1,9 +1,9 @@
 import { useState, useContext, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ShoppingCart, User, Menu, X, Search, LogOut, Heart, ChevronDown } from 'lucide-react';
+import { ShoppingCart, User, Menu, X, Search, LogOut, Heart, ChevronDown, ChevronRight } from 'lucide-react';
 import axios from 'axios';
 import { CartContext } from '../App';
-import { categoryParent, brandRank, parentRank } from '../lib/utils';
+import { buildCategoryTree, displayCategoryName } from '../lib/utils';
 import { Button } from './ui/button';
 import Logo from './Logo';
 import SearchBar from './SearchBar';
@@ -15,16 +15,27 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from './ui/dropdown-menu';
 
 const Navbar = () => {
   const { cartCount, user, logout, API } = useContext(CartContext);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [categories, setCategories] = useState([]);
-  const [sections, setSections] = useState([]);
+  const [categoryTree, setCategoryTree] = useState([]);
+  const [openMobileCats, setOpenMobileCats] = useState({});
   const navigate = useNavigate();
   const { lang, setLang, t } = useI18n();
+
+  const toggleMobileCat = (slug) =>
+    setOpenMobileCats((prev) => ({ ...prev, [slug]: !prev[slug] }));
+
+  const goToCategory = (slug) => {
+    setIsMobileMenuOpen(false);
+    navigate(`/shop/${slug}`);
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -39,41 +50,73 @@ const Navbar = () => {
     axios.get(`${API}/categories/with-counts`)
       .then((res) => {
         if (!active) return;
-        const cats = (res.data || []).filter((c) => c.product_count > 0);
-        setCategories(cats);
-
-        // Group brand categories under their section, e.g.
-        // Bags -> [LV, Gucci], Shoes -> [Nike, ...]. Categories without a
-        // section fall back to a standalone entry so nothing is hidden.
-        const bySection = new Map();
-        cats.forEach((c) => {
-          const parent = categoryParent(c);
-          const secSlug = parent.slug || c.slug;
-          const secName = parent.name || c.name;
-          if (!bySection.has(secSlug)) {
-            bySection.set(secSlug, { slug: secSlug, name: secName, brands: [], total: 0 });
-          }
-          const grp = bySection.get(secSlug);
-          grp.total += c.product_count || 0;
-          // Only list real brand children (skip the section's own leaf entry).
-          if (c.slug !== secSlug) {
-            grp.brands.push({ slug: c.slug, name: c.name, count: c.product_count || 0 });
-          }
-        });
-        // Priority brands first (LV, Gucci, Rolex, ...), then by product count;
-        // sections in the preferred order.
-        const grouped = Array.from(bySection.values())
-          .map((s) => ({
-            ...s,
-            brands: s.brands.sort(
-              (a, b) => brandRank(a.name) - brandRank(b.name) || b.count - a.count || a.name.localeCompare(b.name)),
-          }))
-          .sort((a, b) => parentRank(a.slug) - parentRank(b.slug) || b.total - a.total);
-        setSections(grouped);
+        // Build the full mother -> sub-category -> brand tree. Do NOT pre-filter
+        // by product_count: mother categories (e.g. Jewelry) hold no products
+        // directly, so buildCategoryTree aggregates counts and prunes empties.
+        setCategoryTree(buildCategoryTree(res.data || []));
       })
       .catch(() => {});
     return () => { active = false; };
   }, [API]);
+
+  // Desktop: nested fly-out submenus (mother -> sub-category -> brand).
+  const renderDesktopNodes = (nodes) =>
+    nodes.map((node) =>
+      node.children && node.children.length > 0 ? (
+        <DropdownMenuSub key={node.slug}>
+          <DropdownMenuSubTrigger className="cursor-pointer">
+            <span className="flex-1">{displayCategoryName(node.name)}</span>
+            <span className="ml-2 text-xs opacity-60">{node.total}</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="max-h-[70vh] overflow-y-auto w-56">
+            <DropdownMenuItem className="font-medium cursor-pointer" onClick={() => goToCategory(node.slug)}>
+              All {displayCategoryName(node.name)}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {renderDesktopNodes(node.children)}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      ) : (
+        <DropdownMenuItem key={node.slug} className="cursor-pointer" onClick={() => goToCategory(node.slug)}>
+          <span className="flex-1">{displayCategoryName(node.name)}</span>
+          <span className="ml-2 text-xs opacity-60">{node.total}</span>
+        </DropdownMenuItem>
+      )
+    );
+
+  // Mobile: nested, collapsible indented list.
+  const renderMobileNodes = (nodes, depth = 0) =>
+    nodes.map((node) => {
+      const hasChildren = node.children && node.children.length > 0;
+      const isOpen = !!openMobileCats[node.slug];
+      return (
+        <div key={node.slug}>
+          <div className="flex items-center justify-between">
+            <button
+              className={`flex-1 text-left py-1.5 ${depth === 0 ? 'font-semibold text-gray-800' : 'text-sm text-gray-600'} hover:text-[#d4af37]`}
+              onClick={() => goToCategory(node.slug)}
+            >
+              {displayCategoryName(node.name)}
+              <span className="ml-2 text-xs text-gray-400">{node.total}</span>
+            </button>
+            {hasChildren && (
+              <button
+                className="p-1 text-gray-500"
+                aria-label={`Expand ${displayCategoryName(node.name)}`}
+                onClick={() => toggleMobileCat(node.slug)}
+              >
+                <ChevronRight className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+              </button>
+            )}
+          </div>
+          {hasChildren && isOpen && (
+            <div className="pl-3 border-l border-gold-100 ml-1">
+              {renderMobileNodes(node.children, depth + 1)}
+            </div>
+          )}
+        </div>
+      );
+    });
 
   return (
     <nav
@@ -101,34 +144,18 @@ const Navbar = () => {
             <Link to="/shop" className="nav-link">
               {t('nav.shopAll')}
             </Link>
-            {sections.length > 0 && (
+            {categoryTree.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="nav-link inline-flex items-center gap-1 bg-transparent border-0 cursor-pointer">
                     Categories <ChevronDown className="h-4 w-4" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="max-h-[70vh] overflow-y-auto w-64">
-                  {sections.map((sec) => (
-                    <div key={sec.slug}>
-                      <DropdownMenuLabel
-                        className="cursor-pointer hover:text-[#d4af37]"
-                        onClick={() => navigate(`/shop/${sec.slug}`)}
-                      >
-                        {sec.name}
-                      </DropdownMenuLabel>
-                      {sec.brands.map((b) => (
-                        <DropdownMenuItem
-                          key={b.slug}
-                          className="pl-5 text-sm"
-                          onClick={() => navigate(`/shop/${b.slug}`)}
-                        >
-                          {b.name}
-                        </DropdownMenuItem>
-                      ))}
-                      <DropdownMenuSeparator />
-                    </div>
-                  ))}
+                <DropdownMenuContent align="start" className="max-h-[70vh] overflow-y-auto w-60">
+                  <DropdownMenuLabel className="text-xs uppercase tracking-wider text-gray-400">
+                    Shop by category
+                  </DropdownMenuLabel>
+                  {renderDesktopNodes(categoryTree)}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -247,31 +274,11 @@ const Navbar = () => {
             >
               {t('nav.shopAll')}
             </Link>
-            {sections.length > 0 && (
+            {categoryTree.length > 0 && (
               <div className="py-1">
                 <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Categories</p>
-                <div className="max-h-64 overflow-y-auto pl-2 border-l border-gold-100">
-                  {sections.map((sec) => (
-                    <div key={sec.slug} className="mb-1">
-                      <Link
-                        to={`/shop/${sec.slug}`}
-                        className="block py-1.5 font-semibold text-gray-800 hover:text-[#d4af37]"
-                        onClick={() => setIsMobileMenuOpen(false)}
-                      >
-                        {sec.name}
-                      </Link>
-                      {sec.brands.map((b) => (
-                        <Link
-                          key={b.slug}
-                          to={`/shop/${b.slug}`}
-                          className="block py-1 pl-3 text-sm text-gray-600 hover:text-[#d4af37]"
-                          onClick={() => setIsMobileMenuOpen(false)}
-                        >
-                          {b.name}
-                        </Link>
-                      ))}
-                    </div>
-                  ))}
+                <div className="max-h-72 overflow-y-auto pl-2 border-l border-gold-100">
+                  {renderMobileNodes(categoryTree)}
                 </div>
               </div>
             )}

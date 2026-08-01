@@ -38,6 +38,15 @@ const ProductPage = () => {
     }
   };
 
+  // Prefer the SEO slug URL: /product/<uuid> and /product/<slug> are duplicates
+  // for Google ("Duplicate without user-selected canonical").
+  useEffect(() => {
+    if (!product?.slug) return;
+    if (id === product.slug) return;
+    navigate(`/product/${product.slug}`, { replace: true });
+  }, [product, id, navigate]);
+
+
   const variantGroups = useMemo(() => getProductVariantGroups(product), [product]);
   const displayDescription = useMemo(
     () => cleanProductDescription(product?.description || '', variantGroups),
@@ -65,11 +74,18 @@ const ProductPage = () => {
     );
   };
 
+  const canonicalProductPath = product?.slug
+    ? `/product/${product.slug}`
+    : product?.id
+      ? `/product/${product.id}`
+      : undefined;
+
   useSeo({
     title: product?.meta_title || product?.name,
     description: product?.meta_description || product?.description,
     image: product?.images?.[0] ? resolveImageUrl(product.images[0]) : undefined,
     keywords: productKeywords(product),
+    path: canonicalProductPath,
   });
 
   if (loading) {

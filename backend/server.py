@@ -2547,11 +2547,23 @@ def _public_base_url() -> str:
 
     Prefer PUBLIC_SITE_URL when set. Do NOT use FRONTEND_URL here — that env
     often points at a Vercel preview deployment and would poison the sitemap.
+    Reject preview hosts if somehow configured.
     """
     url = (os.environ.get("PUBLIC_SITE_URL") or "").strip().rstrip("/")
-    if url:
+    if url and "vercel.app" not in url.lower() and "localhost" not in url.lower():
         return url
     return "https://kayee01.com"
+
+
+def _xml_escape(text: str) -> str:
+    return (
+        str(text)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&apos;")
+    )
 
 
 @app.get("/sitemap.xml")
@@ -2561,11 +2573,23 @@ async def sitemap():
     base = _public_base_url()
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     urls = []
+    seen = set()
 
     def add(loc: str, changefreq: str = "weekly", priority: str = "0.6", lastmod: str = now):
+        # Normalize path: no query, no trailing slash (except homepage).
+        path = (loc or "/").split("?")[0].split("#")[0] or "/"
+        if not path.startswith("/"):
+            path = f"/{path}"
+        if path != "/" and path.endswith("/"):
+            path = path.rstrip("/")
+        if path in seen:
+            return
+        seen.add(path)
         urls.append(
-            f"<url><loc>{base}{loc}</loc><lastmod>{lastmod}</lastmod>"
-            f"<changefreq>{changefreq}</changefreq><priority>{priority}</priority></url>"
+            f"<url><loc>{_xml_escape(base + path)}</loc>"
+            f"<lastmod>{_xml_escape(lastmod)}</lastmod>"
+            f"<changefreq>{changefreq}</changefreq>"
+            f"<priority>{priority}</priority></url>"
         )
 
     for path, pr in [("/", "1.0"), ("/shop", "0.9"), ("/blog", "0.7"),
@@ -2582,8 +2606,11 @@ async def sitemap():
         pass
 
     try:
-        products = await db.products.find({}, {"_id": 0, "id": 1, "slug": 1, "updated_at": 1}).limit(5000).to_list(5000)
+        products = await db.products.find(
+            {}, {"_id": 0, "id": 1, "slug": 1, "updated_at": 1}
+        ).limit(5000).to_list(5000)
         for p in products:
+            # Prefer slug only — UUID URLs are duplicates of the slug page.
             ident = p.get("slug") or p.get("id")
             if not ident:
                 continue
@@ -2595,7 +2622,9 @@ async def sitemap():
         pass
 
     try:
-        posts = await db.blog_posts.find({"published": True}, {"_id": 0, "slug": 1, "created_at": 1}).limit(1000).to_list(1000)
+        posts = await db.blog_posts.find(
+            {"published": True}, {"_id": 0, "slug": 1, "created_at": 1}
+        ).limit(1000).to_list(1000)
         for post in posts:
             if post.get("slug"):
                 lm = post.get("created_at", now)[:10] if isinstance(post.get("created_at"), str) else now
@@ -2609,7 +2638,11 @@ async def sitemap():
         + "\n".join(urls)
         + "\n</urlset>"
     )
-    return Response(content=xml, media_type="application/xml")
+    return Response(
+        content=xml,
+        media_type="application/xml",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 @app.get("/robots.txt")
@@ -2619,6 +2652,16 @@ async def robots():
         "User-agent: *\n"
         "Allow: /\n"
         "Disallow: /admin\n"
+        "Disallow: /admin/\n"
+        "Disallow: /cart\n"
+        "Disallow: /checkout\n"
+        "Disallow: /account\n"
+        "Disallow: /login\n"
+        "Disallow: /wishlist\n"
+        "Disallow: /my-orders\n"
+        "Disallow: /order-success\n"
+        "Disallow: /forgot-password\n"
+        "Disallow: /reset-password\n"
         f"Sitemap: {base}/sitemap.xml\n"
     )
     return Response(content=body, media_type="text/plain")

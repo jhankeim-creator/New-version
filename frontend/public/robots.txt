@@ -5,5 +5,11 @@ Disallow: /admin/
 Disallow: /cart
 Disallow: /checkout
 Disallow: /account
+Disallow: /login
+Disallow: /wishlist
+Disallow: /my-orders
+Disallow: /order-success
+Disallow: /forgot-password
+Disallow: /reset-password
 
 Sitemap: https://kayee01.com/sitemap.xml

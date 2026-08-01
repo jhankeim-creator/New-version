@@ -1,11 +1,28 @@
 import { useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const SITE_NAME = 'Kayee01';
+/** Always use the production host so preview / wrong origins never poison canonicals. */
+export const SITE_ORIGIN = 'https://kayee01.com';
 const DEFAULT_DESC =
   'Kayee01 — luxury-inspired fashion, designer watches and premium accessories.';
 
+/** Paths Google should not index (account, cart, auth, admin). */
+const NOINDEX_PREFIXES = [
+  '/cart',
+  '/checkout',
+  '/account',
+  '/login',
+  '/wishlist',
+  '/my-orders',
+  '/admin',
+  '/forgot-password',
+  '/reset-password',
+  '/order-success',
+];
+
 function setMeta(attr, key, content) {
-  if (!content) return;
+  if (content === undefined || content === null || content === '') return;
   let el = document.head.querySelector(`meta[${attr}="${key}"]`);
   if (!el) {
     el = document.createElement('meta');
@@ -24,6 +41,26 @@ function setCanonical(href) {
     document.head.appendChild(el);
   }
   el.setAttribute('href', href);
+}
+
+/** Strip query/hash and trailing slash (except root). */
+export function normalizeCanonicalPath(path) {
+  let p = String(path || '/').split('?')[0].split('#')[0] || '/';
+  if (!p.startsWith('/')) p = `/${p}`;
+  if (p.length > 1) p = p.replace(/\/+$/, '');
+  return p || '/';
+}
+
+export function absoluteCanonical(path) {
+  const p = normalizeCanonicalPath(path);
+  return p === '/' ? `${SITE_ORIGIN}/` : `${SITE_ORIGIN}${p}`;
+}
+
+export function isNoIndexPath(pathname) {
+  const p = normalizeCanonicalPath(pathname);
+  return NOINDEX_PREFIXES.some(
+    (prefix) => p === prefix || p.startsWith(`${prefix}/`)
+  );
 }
 
 // Site-wide default keywords used as a baseline for every page.
@@ -65,18 +102,29 @@ export function productKeywords(product) {
 
 /**
  * Automatic per-page SEO: sets the document title, meta description, keywords,
- * Open Graph / Twitter tags and canonical URL.
+ * Open Graph / Twitter tags and canonical URL (always on kayee01.com, no query).
  */
-export function useSeo({ title, description, image, path, keywords } = {}) {
+export function useSeo({
+  title,
+  description,
+  image,
+  path,
+  keywords,
+  noindex = false,
+} = {}) {
   useEffect(() => {
-    const fullTitle = title ? `${title} | ${SITE_NAME}` : `${SITE_NAME} — Luxury Fashion & Designer Accessories`;
+    const fullTitle = title
+      ? `${title} | ${SITE_NAME}`
+      : `${SITE_NAME} — Luxury Fashion & Designer Accessories`;
     const desc = description || DEFAULT_DESC;
-    const url = typeof window !== 'undefined'
-      ? `${window.location.origin}${path || window.location.pathname}`
-      : '';
+    const rawPath =
+      path ||
+      (typeof window !== 'undefined' ? window.location.pathname : '/');
+    const url = absoluteCanonical(rawPath);
 
     document.title = fullTitle;
     setMeta('name', 'description', desc);
+    setMeta('name', 'robots', noindex ? 'noindex, nofollow' : 'index, follow');
     const kw = normalizeKeywords([...normalizeKeywords(keywords), ...DEFAULT_KEYWORDS]);
     setMeta('name', 'keywords', kw.join(', '));
 
@@ -93,5 +141,47 @@ export function useSeo({ title, description, image, path, keywords } = {}) {
     if (image) setMeta('name', 'twitter:image', image);
 
     setCanonical(url);
-  }, [title, description, image, path]);
+  }, [title, description, image, path, noindex]);
+}
+
+/**
+ * Site-wide SEO hygiene for Google Search Console:
+ * - strip trailing slashes (duplicate URL signal)
+ * - noindex private/account/cart routes that otherwise look like the homepage shell
+ *
+ * Does not override titles on public pages (those use useSeo themselves).
+ */
+export function SeoRouteGuard() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const pathname = location.pathname || '/';
+
+  useEffect(() => {
+    if (pathname.length > 1 && pathname.endsWith('/')) {
+      navigate(
+        {
+          pathname: pathname.replace(/\/+$/, ''),
+          search: location.search,
+          hash: location.hash,
+        },
+        { replace: true }
+      );
+    }
+  }, [pathname, location.search, location.hash, navigate]);
+
+  useEffect(() => {
+    if (!isNoIndexPath(pathname)) return undefined;
+
+    document.title = `${SITE_NAME}`;
+    setMeta('name', 'robots', 'noindex, nofollow');
+    setMeta('name', 'description', 'Private page');
+    setCanonical(absoluteCanonical(pathname));
+
+    return () => {
+      // Public pages re-set robots via useSeo on mount.
+      setMeta('name', 'robots', 'index, follow');
+    };
+  }, [pathname]);
+
+  return null;
 }

@@ -42,6 +42,8 @@ const AdminProducts = () => {
     variant_options: []
   });
 
+  const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : undefined);
+
   useEffect(() => {
     loadData();
   }, []);
@@ -58,7 +60,7 @@ const AdminProducts = () => {
       const fd = new FormData();
       fd.append('file', file);
       const res = await axios.post(`${API}/v2/upload`, fd, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: authHeaders(),
       });
       const url = res.data?.url;
       if (url) {
@@ -81,7 +83,7 @@ const AdminProducts = () => {
       const [productsRes, categoriesRes] = await Promise.all([
         // limit=0 returns every product (not just the first 100) and
         // sort=popular surfaces featured / best-selling products first.
-        axios.get(`${API}/products?limit=0&sort=popular`),
+        axios.get(`${API}/products?limit=0&sort=popular`, { headers: authHeaders() }),
         axios.get(`${API}/categories`)
       ]);
       setProducts(productsRes.data);
@@ -271,8 +273,6 @@ const AdminProducts = () => {
   const toggleSelect = (id) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
-
-  const authHeaders = () => (token ? { Authorization: `Bearer ${token}` } : undefined);
 
   const runBulk = async (fn, successMsg) => {
     setBulkBusy(true);

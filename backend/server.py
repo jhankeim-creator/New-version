@@ -823,7 +823,29 @@ async def delete_category(category_id: str, admin: User = Depends(get_current_ad
 
 # ===== PRODUCT ROUTES =====
 
-@api_router.get("/products", response_model=List[Product])
+# Public storefront may page through the catalog; bulk dumps require admin auth.
+PUBLIC_PRODUCT_PAGE_MAX = 48
+
+
+def _sanitize_public_product(prod: dict) -> dict:
+    """Strip fields that must never leave the API for anonymous scrapers."""
+    for key in ("cost", "download_url", "barcode"):
+        prod.pop(key, None)
+    return prod
+
+
+def _product_response(prod: dict, *, public: bool = True) -> Product:
+    parse_from_mongo(prod)
+    if public:
+        _sanitize_public_product(prod)
+    return Product(**prod)
+
+
+@api_router.get(
+    "/products",
+    response_model=List[Product],
+    response_model_exclude={"cost", "download_url", "barcode"},
+)
 async def get_products(
     category: Optional[str] = None, 
     featured: Optional[bool] = None,
@@ -837,8 +859,23 @@ async def get_products(
     sort_by: Optional[str] = "created_at",  # price, name, created_at, sales_count, popularity
     sort_order: Optional[str] = "desc",  # asc or desc
     skip: int = 0,
-    limit: int = 100  # 0 (or negative) returns every matching product
+    limit: int = 48,
+    current_user: Optional[User] = Depends(get_current_user_optional),
 ):
+    """List products. Anonymous callers are capped; limit=0 / large limits need admin."""
+    wants_export = limit <= 0 or limit > PUBLIC_PRODUCT_PAGE_MAX
+    is_admin = bool(current_user and current_user.role == "admin")
+    if wants_export and not is_admin:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required — bulk catalog export is restricted to admins",
+        )
+    if is_admin and wants_export:
+        # Admin full dump (admin panel). limit<=0 means every matching row.
+        effective_limit = 0 if limit <= 0 else min(limit, 20_000)
+    else:
+        effective_limit = max(1, min(limit, PUBLIC_PRODUCT_PAGE_MAX))
+
     query = {}
     if category:
         cats = [c.strip() for c in category.split(",") if c.strip()]
@@ -893,14 +930,15 @@ async def get_products(
         sort_spec = [(sort_by, sort_direction)]
 
     cursor = db.products.find(query, {"_id": 0}).sort(sort_spec).skip(max(skip, 0))
-    # limit <= 0 means "return everything" (used by the admin panel so every
-    # product is manageable, not just the first page).
-    if limit and limit > 0:
-        cursor = cursor.limit(limit)
-    products = await cursor.to_list(length=(limit if limit and limit > 0 else None))
-    for prod in products:
-        parse_from_mongo(prod)
-    return [Product(**prod) for prod in products]
+    if effective_limit and effective_limit > 0:
+        cursor = cursor.limit(effective_limit)
+    products = await cursor.to_list(
+        length=(effective_limit if effective_limit and effective_limit > 0 else None)
+    )
+    return [
+        _product_response(prod, public=not is_admin)
+        for prod in products
+    ]
 
 @api_router.get("/products/count")
 async def get_products_count(
@@ -940,7 +978,11 @@ async def get_products_count(
     count = await db.products.count_documents(query)
     return {"count": count}
 
-@api_router.get("/products/search")
+@api_router.get(
+    "/products/search",
+    response_model=List[Product],
+    response_model_exclude={"cost", "download_url", "barcode"},
+)
 async def search_products(q: str, limit: int = 10):
     """Search products by name, description, or tags"""
     if not q or len(q.strip()) < 2:
@@ -966,13 +1008,18 @@ async def search_products(q: str, limit: int = 10):
     }
     
     products = await db.products.find(search_query, {"_id": 0}).limit(limit).to_list(length=None)
-    return [Product(**parse_from_mongo(p)) for p in products]
+    return [_product_response(parse_from_mongo(p)) for p in products]
 
 
 
-@api_router.get("/products/best-sellers", response_model=List[Product])
+@api_router.get(
+    "/products/best-sellers",
+    response_model=List[Product],
+    response_model_exclude={"cost", "download_url", "barcode"},
+)
 async def get_best_sellers(limit: int = 10):
     """Get best selling products based on order items"""
+    limit = max(1, min(int(limit or 10), PUBLIC_PRODUCT_PAGE_MAX))
     # Aggregate orders to find most purchased products
     pipeline = [
         {"$unwind": "$items"},
@@ -994,9 +1041,31 @@ async def get_best_sellers(limit: int = 10):
     else:
         products = await db.products.find({"id": {"$in": product_ids}}, {"_id": 0}).to_list(length=None)
     
-    return [Product(**parse_from_mongo(p)) for p in products]
+    return [_product_response(parse_from_mongo(p)) for p in products]
 
-@api_router.get("/products/{product_id}", response_model=Product)
+
+@api_router.get(
+    "/products/by-ids",
+    response_model=List[Product],
+    response_model_exclude={"cost", "download_url", "barcode"},
+)
+async def get_products_by_ids(ids: str):
+    """Get products by comma-separated IDs (capped — not a bulk export tool)."""
+    product_ids = [i.strip() for i in ids.split(",") if i.strip()][:PUBLIC_PRODUCT_PAGE_MAX]
+    if not product_ids:
+        return []
+    products = await db.products.find(
+        {"id": {"$in": product_ids}},
+        {"_id": 0},
+    ).to_list(length=len(product_ids))
+    return [_product_response(parse_from_mongo(p)) for p in products]
+
+
+@api_router.get(
+    "/products/{product_id}",
+    response_model=Product,
+    response_model_exclude={"cost", "download_url", "barcode"},
+)
 async def get_product(product_id: str):
     # Resolve by id first, then by SEO slug so both /product/<id> and
     # /product/<slug> work.
@@ -1005,7 +1074,7 @@ async def get_product(product_id: str):
         product = await db.products.find_one({"slug": product_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    return Product(**parse_from_mongo(product))
+    return _product_response(parse_from_mongo(product))
 
 @api_router.post("/products", response_model=Product)
 async def create_product(product_data: ProductCreate, admin: User = Depends(get_current_admin)):
@@ -1715,16 +1784,6 @@ async def remove_from_wishlist(product_id: str, current_user: User = Depends(get
         raise HTTPException(status_code=404, detail="Product not in wishlist")
     
     return {"message": "Removed from wishlist"}
-
-@api_router.get("/products/by-ids")
-async def get_products_by_ids(ids: str):
-    """Get products by comma-separated IDs"""
-    product_ids = [id.strip() for id in ids.split(',') if id.strip()]
-    products = await db.products.find(
-        {"id": {"$in": product_ids}},
-        {"_id": 0}
-    ).to_list(length=None)
-    return [Product(**parse_from_mongo(p)) for p in products]
 
 # ===== WALLET ROUTES =====
 
@@ -2665,6 +2724,49 @@ async def robots():
         f"Sitemap: {base}/sitemap.xml\n"
     )
     return Response(content=body, media_type="text/plain")
+
+# --- Light anti-scrape rate limit (in-memory; resets on process restart) ---
+from collections import defaultdict
+import time as _time
+
+_rate_hits: dict = defaultdict(list)
+_RATE_WINDOW_SEC = 60
+_RATE_MAX_HITS = 90  # per IP / minute on sensitive list endpoints
+_RATE_PATH_PREFIXES = (
+    "/api/products",
+    "/api/v2/products",
+    "/api/v2/media",
+    "/api/blog",
+)
+
+
+@app.middleware("http")
+async def anti_export_rate_limit(request: Request, call_next):
+    path = request.url.path or ""
+    if request.method == "GET" and any(path.startswith(p) for p in _RATE_PATH_PREFIXES):
+        # Prefer proxy headers when present (Render / Cloudflare).
+        fwd = (request.headers.get("cf-connecting-ip")
+               or request.headers.get("x-forwarded-for")
+               or "").split(",")[0].strip()
+        ip = fwd or (request.client.host if request.client else "unknown")
+        now = _time.time()
+        bucket = [t for t in _rate_hits[ip] if now - t < _RATE_WINDOW_SEC]
+        if len(bucket) >= _RATE_MAX_HITS:
+            return Response(
+                content='{"detail":"Too many requests. Catalog export is rate-limited."}',
+                status_code=429,
+                media_type="application/json",
+                headers={"Retry-After": "60"},
+            )
+        bucket.append(now)
+        _rate_hits[ip] = bucket
+        # Bound memory: drop idle keys occasionally
+        if len(_rate_hits) > 5000:
+            stale = [k for k, v in _rate_hits.items() if not v or now - v[-1] > _RATE_WINDOW_SEC]
+            for k in stale[:2000]:
+                _rate_hits.pop(k, None)
+    return await call_next(request)
+
 
 # --- CORS configuration ---
 # If allow_credentials=True, allow_origins cannot be "*".

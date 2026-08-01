@@ -10,6 +10,7 @@ const AdminBlog = () => {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [repairing, setRepairing] = useState(false);
 
   const load = async () => {
     try {
@@ -41,6 +42,21 @@ const AdminBlog = () => {
     }
   };
 
+  const repair = async () => {
+    setRepairing(true);
+    try {
+      const res = await axios.post(`${API}/blog/repair`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success(`Repaired ${res.data?.updated || 0} of ${res.data?.scanned || 0} articles`);
+      load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to repair articles');
+    } finally {
+      setRepairing(false);
+    }
+  };
+
   const remove = async (id) => {
     if (!window.confirm('Delete this article?')) return;
     try {
@@ -60,12 +76,15 @@ const AdminBlog = () => {
         <div>
           <h2 className="text-2xl font-bold">Blog</h2>
           <p className="text-sm text-ink-muted mt-1">
-            A new article is written automatically every week from your products (no API key needed). You can also generate one now.
+            Weekly editorial notes from your catalog (not ad copy). You can generate a new article or repair broken covers / old promo-style posts.
           </p>
         </div>
         <div className="flex gap-2">
           <Button onClick={load} variant="outline" size="sm">
             <RefreshCw className="h-4 w-4" />
+          </Button>
+          <Button onClick={repair} disabled={repairing} variant="outline">
+            {repairing ? 'Repairing…' : 'Repair articles'}
           </Button>
           <Button onClick={generate} disabled={generating} className="btn-gold text-white">
             <Sparkles className="mr-2 h-4 w-4" />

@@ -1,5 +1,9 @@
 User-agent: *
 Allow: /
 Disallow: /admin
+Disallow: /admin/
+Disallow: /cart
+Disallow: /checkout
+Disallow: /account
 
-Sitemap: https://new-version-k1ov.onrender.com/sitemap.xml
+Sitemap: https://kayee01.com/sitemap.xml

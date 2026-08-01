@@ -5,6 +5,8 @@
   "outputDirectory": "frontend/build",
   "framework": "create-react-app",
   "rewrites": [
+    { "source": "/sitemap.xml", "destination": "https://api.kayee01.com/sitemap.xml" },
+    { "source": "/robots.txt", "destination": "https://api.kayee01.com/robots.txt" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

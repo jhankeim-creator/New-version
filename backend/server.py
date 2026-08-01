@@ -2543,8 +2543,12 @@ app.include_router(blog_router)
 # ===== SEO: sitemap.xml & robots.txt =====
 
 def _public_base_url() -> str:
-    url = os.environ.get("FRONTEND_URL", "http://localhost:3000").strip().rstrip("/")
-    return url
+    """Canonical public storefront URL for sitemap/robots (Google Search Console)."""
+    for key in ("PUBLIC_SITE_URL", "FRONTEND_URL", "SITE_URL"):
+        url = (os.environ.get(key) or "").strip().rstrip("/")
+        if url:
+            return url
+    return "https://kayee01.com"
 
 
 @app.get("/sitemap.xml")

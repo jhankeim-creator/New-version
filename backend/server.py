@@ -1828,6 +1828,114 @@ async def get_public_payment_gateways():
     gateways = settings.get("payment_gateways", [])
     return [g for g in gateways if g.get("enabled", True)]
 
+
+@api_router.get("/settings/checkout-payments")
+async def get_checkout_payments():
+    """Payment methods available on checkout (enabled + configured only).
+
+    Built-in Stripe/Plisio require API keys in admin. Manual and custom
+    gateways only appear when their ``enabled`` flag is true. Inactive
+    methods are never returned so they cannot show in the UI.
+    """
+    settings = await db.admin_settings.find_one({"id": "admin_settings"}, {"_id": 0}) or {}
+    api = await db.api_settings.find_one({"_id": "global"}) or {}
+    core = settings.get("core_payment_methods") or {}
+    # Defaults: built-ins on, but keys still required for stripe/plisio.
+    stripe_on = core.get("stripe", True)
+    plisio_on = core.get("plisio", True)
+    manual_on = core.get("manual", True)
+
+    has_stripe = bool(
+        (api.get("stripe_secret_key") or os.environ.get("STRIPE_SECRET_KEY") or "").strip()
+        and (api.get("stripe_publishable_key") or os.environ.get("STRIPE_PUBLISHABLE_KEY") or "").strip()
+    )
+    has_plisio = bool(
+        (api.get("plisio_api_key") or os.environ.get("PLISIO_API_KEY") or "").strip()
+    )
+
+    methods = []
+    if stripe_on and has_stripe:
+        methods.append({
+            "id": "stripe",
+            "name": "Credit / Debit Card",
+            "description": "Secure card payment via Stripe",
+            "type": "stripe",
+            "icon": "card",
+        })
+    if plisio_on and has_plisio:
+        methods.append({
+            "id": "plisio",
+            "name": "Cryptocurrency",
+            "description": "100+ coins accepted",
+            "type": "plisio",
+            "discount": "15% OFF",
+            "icon": "crypto",
+        })
+    if manual_on:
+        methods.append({
+            "id": "manual",
+            "name": "Bank / Payoneer",
+            "description": "Transfer — instructions by email",
+            "type": "manual",
+            "icon": "bank",
+        })
+
+    for g in settings.get("payment_gateways", []) or []:
+        if not g.get("enabled", True):
+            continue
+        gid = g.get("gateway_id") or g.get("id")
+        if not gid:
+            continue
+        gtype = g.get("gateway_type") or "manual"
+        # Skip duplicates of built-ins already listed.
+        if gtype in ("stripe", "plisio") and any(m["type"] == gtype for m in methods):
+            continue
+        methods.append({
+            "id": f"manual-{gid}" if gtype == "manual" else gid,
+            "name": g.get("name") or "Payment",
+            "description": g.get("description") or "",
+            "type": gtype,
+            "icon": "bank" if gtype == "manual" else "card",
+            "instructions": g.get("payment_instructions") or g.get("instructions") or "",
+        })
+
+    return methods
+
+
+@api_router.get("/admin/settings/core-payment-methods")
+async def get_core_payment_methods(admin: User = Depends(get_current_admin)):
+    settings = await db.admin_settings.find_one({"id": "admin_settings"}, {"_id": 0}) or {}
+    core = settings.get("core_payment_methods") or {}
+    api = await db.api_settings.find_one({"_id": "global"}) or {}
+    return {
+        "stripe": core.get("stripe", True),
+        "plisio": core.get("plisio", True),
+        "manual": core.get("manual", True),
+        "stripe_configured": bool(
+            (api.get("stripe_secret_key") or os.environ.get("STRIPE_SECRET_KEY") or "").strip()
+            and (api.get("stripe_publishable_key") or os.environ.get("STRIPE_PUBLISHABLE_KEY") or "").strip()
+        ),
+        "plisio_configured": bool(
+            (api.get("plisio_api_key") or os.environ.get("PLISIO_API_KEY") or "").strip()
+        ),
+    }
+
+
+@api_router.put("/admin/settings/core-payment-methods")
+async def update_core_payment_methods(payload: dict, admin: User = Depends(get_current_admin)):
+    core = {
+        "stripe": bool(payload.get("stripe", True)),
+        "plisio": bool(payload.get("plisio", True)),
+        "manual": bool(payload.get("manual", True)),
+    }
+    await db.admin_settings.update_one(
+        {"id": "admin_settings"},
+        {"$set": {"core_payment_methods": core}},
+        upsert=True,
+    )
+    return core
+
+
 @api_router.post("/admin/settings/payment-gateways")
 async def create_payment_gateway(gateway_data: PaymentGatewayCreate, admin: User = Depends(get_current_admin)):
     """Add a new payment gateway"""

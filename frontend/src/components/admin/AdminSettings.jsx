@@ -17,6 +17,13 @@ const AdminSettings = () => {
 
   // Payment Gateways State
   const [paymentGateways, setPaymentGateways] = useState([]);
+  const [corePayments, setCorePayments] = useState({
+    stripe: true,
+    plisio: true,
+    manual: true,
+    stripe_configured: false,
+    plisio_configured: false,
+  });
   const [newGateway, setNewGateway] = useState({
     gateway_type: 'manual',
     name: '',
@@ -97,8 +104,12 @@ const AdminSettings = () => {
       const headers = { Authorization: `Bearer ${token}` };
       
       if (activeTab === 'payment') {
-        const res = await axios.get(`${API}/admin/settings/payment-gateways`, { headers });
-        setPaymentGateways(res.data);
+        const [gw, core] = await Promise.all([
+          axios.get(`${API}/admin/settings/payment-gateways`, { headers }),
+          axios.get(`${API}/admin/settings/core-payment-methods`, { headers }),
+        ]);
+        setPaymentGateways(gw.data);
+        setCorePayments((prev) => ({ ...prev, ...core.data }));
       } else if (activeTab === 'shipping') {
         const res = await axios.get(`${API}/admin/settings/shipping-methods`, { headers });
         setShippingMethods(res.data);
@@ -182,6 +193,37 @@ const AdminSettings = () => {
       loadData();
     } catch (error) {
       toast.error('Failed to delete payment gateway');
+    }
+  };
+
+  const saveCorePayments = async (next) => {
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const res = await axios.put(
+        `${API}/admin/settings/core-payment-methods`,
+        { stripe: next.stripe, plisio: next.plisio, manual: next.manual },
+        { headers }
+      );
+      setCorePayments((prev) => ({ ...prev, ...res.data }));
+      toast.success('Checkout payment methods updated');
+    } catch (error) {
+      toast.error('Failed to update payment methods');
+    }
+  };
+
+  const togglePaymentGateway = async (gateway) => {
+    try {
+      const headers = { Authorization: `Bearer ${token}` };
+      const updated = { ...gateway, enabled: !gateway.enabled };
+      await axios.put(
+        `${API}/admin/settings/payment-gateways/${gateway.gateway_id}`,
+        updated,
+        { headers }
+      );
+      toast.success(updated.enabled ? 'Gateway enabled on checkout' : 'Gateway hidden from checkout');
+      loadData();
+    } catch (error) {
+      toast.error('Failed to update gateway');
     }
   };
 
@@ -509,6 +551,53 @@ const AdminSettings = () => {
         <div className="space-y-6">
           <Card>
             <CardHeader>
+              <CardTitle>Checkout payment methods</CardTitle>
+              <p className="text-sm text-gray-600 font-normal">
+                Only methods that are ON below (and configured with API keys for Stripe/Plisio) appear on checkout.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {[
+                {
+                  key: 'stripe',
+                  label: 'Stripe (card)',
+                  hint: corePayments.stripe_configured
+                    ? 'API keys configured'
+                    : 'Add Stripe keys in the API Keys tab — otherwise it stays hidden',
+                },
+                {
+                  key: 'plisio',
+                  label: 'Plisio (crypto)',
+                  hint: corePayments.plisio_configured
+                    ? 'API key configured'
+                    : 'Add Plisio key in the API Keys tab — otherwise it stays hidden',
+                },
+                {
+                  key: 'manual',
+                  label: 'Bank / Payoneer (manual)',
+                  hint: 'No API key required',
+                },
+              ].map((row) => (
+                <div key={row.key} className="flex items-center justify-between gap-3 p-3 border rounded-lg">
+                  <div>
+                    <p className="font-semibold text-sm">{row.label}</p>
+                    <p className="text-xs text-gray-500">{row.hint}</p>
+                  </div>
+                  <Switch
+                    checked={!!corePayments[row.key]}
+                    onCheckedChange={(checked) => {
+                      const next = { ...corePayments, [row.key]: checked };
+                      setCorePayments(next);
+                      saveCorePayments(next);
+                    }}
+                  />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle>Add Payment Gateway</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -583,18 +672,32 @@ const AdminSettings = () => {
                     <div className="flex-1">
                       <p className="font-semibold text-sm md:text-base">{gateway.name}</p>
                       <p className="text-xs md:text-sm text-gray-600">{gateway.description}</p>
-                      <p className="text-xs text-gray-500 mt-1">Type: {gateway.gateway_type}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Type: {gateway.gateway_type}
+                        {gateway.enabled === false && (
+                          <span className="ml-2 text-amber-700 font-medium">· Hidden on checkout</span>
+                        )}
+                      </p>
                       {gateway.instructions && (
                         <p className="text-xs text-gray-600 mt-2 whitespace-pre-wrap break-words">{gateway.instructions}</p>
                       )}
                     </div>
-                    <Button
-                      onClick={() => deletePaymentGateway(gateway.gateway_id)}
-                      variant="destructive"
-                      size="sm"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500">Show</span>
+                        <Switch
+                          checked={gateway.enabled !== false}
+                          onCheckedChange={() => togglePaymentGateway(gateway)}
+                        />
+                      </div>
+                      <Button
+                        onClick={() => deletePaymentGateway(gateway.gateway_id)}
+                        variant="destructive"
+                        size="sm"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
                 {paymentGateways.length === 0 && (
@@ -998,6 +1101,19 @@ const AdminSettings = () => {
       {/* WhatsApp Support Tab */}
       {activeTab === 'whatsapp' && (
         <div className="space-y-6">
+          <Card className="border-green-200 bg-green-50/40">
+            <CardContent className="pt-6 text-sm text-gray-700 space-y-2">
+              <p className="font-semibold text-gray-900">How admins receive chat messages</p>
+              <p>
+                The green chat button opens <strong>WhatsApp</strong> on the customer’s phone and sends
+                a message to the numbers you set below. Messages arrive in the WhatsApp app / WhatsApp Business
+                on those phones — they are <strong>not stored inside this website’s database</strong>.
+              </p>
+              <p>
+                To reply: open WhatsApp on the phone for Customer Support / Sales / Wholesale and answer there.
+              </p>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">

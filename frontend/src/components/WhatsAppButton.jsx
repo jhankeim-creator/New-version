@@ -43,7 +43,7 @@ const WhatsAppButton = () => {
         href={buildWaLink(b.number, b.message)}
         target="_blank"
         rel="noopener noreferrer"
-        className="fixed bottom-6 right-6 z-50 flex items-center justify-center bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-full p-4 shadow-xl transition-all duration-300 hover:scale-110 whatsapp-pulse"
+        className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-50 flex items-center justify-center bg-[#25D366] hover:bg-[#1ebe5d] text-white rounded-full p-4 shadow-xl transition-all duration-300 hover:scale-110 whatsapp-pulse"
         data-testid="whatsapp-button"
         aria-label={`Contact us on WhatsApp: ${b.label}`}
         title={b.label}
@@ -55,7 +55,7 @@ const WhatsAppButton = () => {
 
   // Multiple contacts -> expandable stack of labeled support buttons.
   return (
-    <div ref={containerRef} className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+    <div ref={containerRef} className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-50 flex flex-col items-end gap-3">
       {open && (
         <div className="flex flex-col items-end gap-2 mb-1 animate-in fade-in slide-in-from-bottom-2 duration-200">
           {settings.title && (

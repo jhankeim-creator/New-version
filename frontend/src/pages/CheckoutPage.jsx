@@ -5,7 +5,6 @@ import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Textarea } from '../components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import Footer from '../components/Footer';
 import axios from 'axios';
@@ -33,14 +32,6 @@ function formatAnswersAsNotes(answers, cart) {
       if (extra) lines.push(`  Note: ${extra}`);
     }
   });
-  if (answers.is_gift === 'yes') {
-    lines.push('• Gift order: Yes');
-    if (answers.gift_message) lines.push(`  Gift message: ${answers.gift_message}`);
-  }
-  if (answers.delivery_instructions) {
-    lines.push(`• Delivery: ${answers.delivery_instructions}`);
-  }
-  if (answers.other) lines.push(`• Other: ${answers.other}`);
   return lines.join('\n') || null;
 }
 
@@ -54,7 +45,7 @@ const CheckoutPage = () => {
   const [couponCode, setCouponCode] = useState('');
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [couponApplied, setCouponApplied] = useState(false);
-  const [paymentGateways, setPaymentGateways] = useState([]);
+  const [paymentMethodsList, setPaymentMethodsList] = useState([]);
   const [answers, setAnswers] = useState({});
   const [formData, setFormData] = useState({
     name: '',
@@ -64,14 +55,14 @@ const CheckoutPage = () => {
     city: '',
     postalCode: '',
     country: '',
-    paymentMethod: 'stripe',
+    paymentMethod: '',
   });
 
   useEffect(() => {
     if (cart.length === 0 && !orderPlaced) {
       navigate('/cart');
     }
-    loadPaymentGateways();
+    loadCheckoutPayments();
     loadShippingMethods();
   }, [cart, navigate, orderPlaced]);
 
@@ -92,12 +83,18 @@ const CheckoutPage = () => {
     });
   }, [cart]);
 
-  const loadPaymentGateways = async () => {
+  const loadCheckoutPayments = async () => {
     try {
-      const response = await axios.get(`${API}/settings/payment-gateways`);
-      setPaymentGateways(response.data.filter((g) => g.enabled));
+      const response = await axios.get(`${API}/settings/checkout-payments`);
+      const methods = Array.isArray(response.data) ? response.data : [];
+      setPaymentMethodsList(methods);
+      setFormData((prev) => {
+        if (prev.paymentMethod && methods.some((m) => m.id === prev.paymentMethod)) return prev;
+        return { ...prev, paymentMethod: methods[0]?.id || '' };
+      });
     } catch (error) {
-      console.error('Failed to load payment gateways:', error);
+      console.error('Failed to load payment methods:', error);
+      setPaymentMethodsList([]);
     }
   };
 
@@ -154,6 +151,10 @@ const CheckoutPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.paymentMethod) {
+      toast.error('No payment method is available. Please contact support.');
+      return;
+    }
     setLoading(true);
 
     // Require color answer when the product didn't already pick one in cart.
@@ -210,22 +211,16 @@ const CheckoutPage = () => {
     }
   };
 
-  const paymentMethods = [
-    { id: 'stripe', name: 'Credit / Debit Card', icon: CreditCard, description: 'Secure card payment via Stripe', type: 'stripe' },
-    { id: 'plisio', name: 'Cryptocurrency', icon: Wallet, description: '100+ coins accepted', discount: '15% OFF', type: 'plisio' },
-    { id: 'manual', name: 'Bank / Payoneer', icon: DollarSign, description: 'Transfer — instructions by email', type: 'manual' },
-  ];
+  const iconFor = (method) => {
+    if (method.type === 'stripe' || method.icon === 'card') return CreditCard;
+    if (method.type === 'plisio' || method.icon === 'crypto') return Wallet;
+    return method.type === 'manual' || method.icon === 'bank' ? DollarSign : Banknote;
+  };
 
-  const allPaymentMethods = [
-    ...paymentMethods,
-    ...paymentGateways.map((gateway) => ({
-      id: gateway.gateway_type === 'manual' ? `manual-${gateway.gateway_id || gateway.id}` : (gateway.gateway_id || gateway.id),
-      name: gateway.name,
-      icon: gateway.gateway_type === 'manual' ? Banknote : DollarSign,
-      description: gateway.description || 'Manual payment method',
-      type: gateway.gateway_type,
-    })),
-  ];
+  const allPaymentMethods = paymentMethodsList.map((method) => ({
+    ...method,
+    icon: iconFor(method),
+  }));
 
   const sectionClass = 'rounded-2xl border border-black/5 bg-white shadow-card overflow-hidden';
   const sectionHead = 'px-5 py-4 border-b border-gold-100 bg-gradient-to-r from-[#fbf7ec] to-white';
@@ -435,61 +430,6 @@ const CheckoutPage = () => {
                         </div>
                       </div>
                     ))}
-
-                    <div className="pt-2 space-y-3 border-t border-gold-100">
-                      <div>
-                        <Label className="mb-2 block">Is this a gift?</Label>
-                        <RadioGroup
-                          value={answers.is_gift || 'no'}
-                          onValueChange={(v) => setAnswer('is_gift', v)}
-                          className="flex gap-4"
-                        >
-                          <label className="flex items-center gap-2 text-sm cursor-pointer">
-                            <RadioGroupItem value="no" id="gift-no" />
-                            No
-                          </label>
-                          <label className="flex items-center gap-2 text-sm cursor-pointer">
-                            <RadioGroupItem value="yes" id="gift-yes" />
-                            Yes
-                          </label>
-                        </RadioGroup>
-                      </div>
-                      {answers.is_gift === 'yes' && (
-                        <div>
-                          <Label htmlFor="gift_message">Gift message</Label>
-                          <Textarea
-                            id="gift_message"
-                            value={answers.gift_message || ''}
-                            onChange={(e) => setAnswer('gift_message', e.target.value)}
-                            placeholder="Message for the recipient…"
-                            rows={2}
-                            className="mt-1.5 bg-white"
-                          />
-                        </div>
-                      )}
-                      <div>
-                        <Label htmlFor="delivery_instructions">Delivery instructions</Label>
-                        <Input
-                          id="delivery_instructions"
-                          value={answers.delivery_instructions || ''}
-                          onChange={(e) => setAnswer('delivery_instructions', e.target.value)}
-                          placeholder="Gate code, leave with concierge…"
-                          className="mt-1.5 bg-white"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="other">Other comments</Label>
-                        <Textarea
-                          id="other"
-                          value={answers.other || ''}
-                          onChange={(e) => setAnswer('other', e.target.value)}
-                          placeholder="Anything else we should know?"
-                          rows={2}
-                          className="mt-1.5 bg-white"
-                          data-testid="input-notes"
-                        />
-                      </div>
-                    </div>
                   </div>
                 </section>
 
@@ -499,6 +439,11 @@ const CheckoutPage = () => {
                     <h2 className="text-lg font-semibold tracking-tight">5. Payment</h2>
                   </div>
                   <div className={sectionBody}>
+                    {allPaymentMethods.length === 0 ? (
+                      <p className="text-sm text-amber-800 bg-[#fbf7ec] border border-gold-100 rounded-xl p-4">
+                        No payment methods are active right now. Please contact support via WhatsApp, or ask the store admin to enable a payment method in Settings.
+                      </p>
+                    ) : (
                     <RadioGroup
                       value={formData.paymentMethod}
                       onValueChange={(value) => setFormData({ ...formData, paymentMethod: value })}
@@ -534,6 +479,7 @@ const CheckoutPage = () => {
                         );
                       })}
                     </RadioGroup>
+                    )}
                     <div className="mt-2 p-4 rounded-xl border border-gold-100 bg-[#fbf7ec]">
                       <p className="text-sm text-[#5c4a2a]">
                         After you place the order, payment instructions arrive by email.

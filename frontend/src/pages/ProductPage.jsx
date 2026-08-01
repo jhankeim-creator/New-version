@@ -2,7 +2,7 @@ import { useEffect, useState, useContext, useMemo } from 'react';
 import { resolveImageUrl } from '../lib/utils';
 import { useSeo } from '../lib/seo';
 import { productKeywords } from '../lib/seo';
-import { getProductVariantGroups, variantPriceDelta } from '../lib/variants';
+import { getProductVariantGroups, variantPriceDelta, cleanProductDescription } from '../lib/variants';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
@@ -39,6 +39,10 @@ const ProductPage = () => {
   };
 
   const variantGroups = useMemo(() => getProductVariantGroups(product), [product]);
+  const displayDescription = useMemo(
+    () => cleanProductDescription(product?.description || '', variantGroups),
+    [product, variantGroups]
+  );
   const priceDelta = useMemo(
     () => variantPriceDelta(variantGroups, selectedVariants),
     [variantGroups, selectedVariants]
@@ -152,13 +156,57 @@ const ProductPage = () => {
                   {product.stock > 0 ? (product.stock <= 5 ? `Only ${product.stock} left in stock` : 'In stock') : 'Out of stock'}
                 </p>
               )}
-              {product.description && (
+
+              {/* Size / Color selectors — above description so they are obvious */}
+              {variantGroups.length > 0 && (
+                <div className="mb-8 p-4 rounded-xl border border-gold-200 bg-cream/60 space-y-5" data-testid="variant-picker">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#a9832f]">
+                    Choose your options
+                  </p>
+                  {variantGroups.map((group) => (
+                    <div key={group.name} data-testid={`variant-${group.name}`}>
+                      <label className="block text-sm font-semibold text-gray-900 mb-2">
+                        {group.name}
+                        <span className="ml-2 font-normal text-ink-muted">
+                          {selectedVariants[group.name]
+                            ? `: ${selectedVariants[group.name]}`
+                            : ' — tap one'}
+                        </span>
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        {group.values.map((value) => {
+                          const active = selectedVariants[group.name] === value;
+                          return (
+                            <button
+                              key={value}
+                              type="button"
+                              onClick={() =>
+                                setSelectedVariants((prev) => ({ ...prev, [group.name]: value }))
+                              }
+                              className={`min-w-[3rem] px-4 py-2.5 rounded-md border text-sm font-medium transition-colors ${
+                                active
+                                  ? 'border-[#d4af37] bg-[#d4af37] text-white shadow-sm'
+                                  : 'border-gray-300 bg-white text-gray-900 hover:border-[#d4af37]'
+                              }`}
+                              data-testid={`variant-option-${group.name}-${value}`}
+                            >
+                              {value}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {displayDescription && (
                 <div className="mb-6">
                   <h2 className="text-xs font-semibold uppercase tracking-[0.15em] text-ink-muted mb-2">
                     Description
                   </h2>
                   <div className="text-gray-700 text-base md:text-lg leading-relaxed space-y-3">
-                    {product.description
+                    {displayDescription
                       .split(/\n\s*\n|\r\n\r\n/)
                       .map((para) => para.trim())
                       .filter(Boolean)
@@ -168,40 +216,6 @@ const ProductPage = () => {
                   </div>
                 </div>
               )}
-
-              {/* Variant Selectors (color, size, ... parsed from description) */}
-              {variantGroups.map((group) => (
-                <div className="mb-6" key={group.name} data-testid={`variant-${group.name}`}>
-                  <label className="block text-sm font-semibold mb-2">
-                    {group.name}
-                    {selectedVariants[group.name] && (
-                      <span className="ml-2 font-normal text-ink-muted">: {selectedVariants[group.name]}</span>
-                    )}
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {group.values.map((value) => {
-                      const active = selectedVariants[group.name] === value;
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          onClick={() =>
-                            setSelectedVariants((prev) => ({ ...prev, [group.name]: value }))
-                          }
-                          className={`px-4 py-2 rounded-full border text-sm transition-colors ${
-                            active
-                              ? 'border-gold-500 bg-gold-500 text-white'
-                              : 'border-gray-300 hover:border-gold-400'
-                          }`}
-                          data-testid={`variant-option-${group.name}-${value}`}
-                        >
-                          {value}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
 
               {/* Quantity Selector */}
               <div className="mb-6">

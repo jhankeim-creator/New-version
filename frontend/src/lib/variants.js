@@ -21,6 +21,14 @@ function titleCase(text) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** Canonicalize Size/Sizes and Color/Colour so we never show duplicate axes. */
+export function canonicalVariantName(name) {
+  const n = String(name || '').trim().toLowerCase();
+  if (/^sizes?$/.test(n)) return 'Size';
+  if (/^colou?rs?$/.test(n)) return 'Color';
+  return titleCase(String(name || ''));
+}
+
 /**
  * Split a description into "Label: value" clauses.
  * Imports often store one flat string like:
@@ -36,6 +44,18 @@ function extractLabeledClauses(description) {
     clauses.push({ name: match[1].trim(), valuesRaw: match[2].trim() });
   }
   return clauses;
+}
+
+/**
+ * Also pick up wholesale shoe/pants codes like "sz38-45" that are not labeled
+ * "Sizes:" in the description.
+ */
+function sizesFromSzToken(description) {
+  if (!description) return [];
+  const m = description.match(/\bsz\s*(\d{2}\s*[-–—]\s*\d{2})\b/i);
+  if (!m) return [];
+  const values = expandSizeToken(m[1]);
+  return values.length >= 2 ? values : [];
 }
 
 /**
@@ -72,13 +92,23 @@ export function parseVariantsFromDescription(description) {
     // avoid turning ordinary sentences ("Note: ...") into variants.
     if (!isKnown && rawName.split(/\s+/).length > 2) continue;
 
-    const name = titleCase(rawName);
+    const name = canonicalVariantName(rawName);
     const dedupKey = name.toLowerCase();
     if (seen.has(dedupKey)) continue;
     seen.add(dedupKey);
 
     groups.push(expandSizeGroup({ name, values: [...new Set(values)] }));
   }
+
+  // Shoe/pants: "sz38-45" without a Sizes: label.
+  if (!seen.has('size')) {
+    const szValues = sizesFromSzToken(description);
+    if (szValues.length >= 2) {
+      groups.push({ name: 'Size', values: szValues });
+      seen.add('size');
+    }
+  }
+
   return groups;
 }
 
@@ -102,7 +132,11 @@ export function normalizeVariants(variants) {
           if (!Number.isNaN(delta) && delta !== 0) prices[value] = delta;
         }
       }
-      return expandSizeGroup({ name: titleCase(String(v.name)), values, prices });
+      return expandSizeGroup({
+        name: canonicalVariantName(v.name),
+        values,
+        prices,
+      });
     })
     .filter((v) => v.values.length > 0);
 }
@@ -121,6 +155,38 @@ export function getProductVariantGroups(product) {
     if (!byName.has(g.name.toLowerCase())) byName.set(g.name.toLowerCase(), g);
   }
   return Array.from(byName.values());
+}
+
+/**
+ * Strip size/color catalog noise from the description so customers see a clean
+ * blurb — choices live in the Size/Color buttons, not in the paragraph.
+ */
+export function cleanProductDescription(description, variantGroups = []) {
+  if (!description || typeof description !== 'string') return '';
+  const hasSize = (variantGroups || []).some((g) => g.name === 'Size');
+  const hasColor = (variantGroups || []).some((g) => g.name === 'Color');
+
+  let text = description;
+  // Drop whole "Sizes: …" / "Colors: …" clauses when we already show selectors.
+  if (hasSize) {
+    text = text.replace(/\bSizes?\s*[:：]\s*[^.\n\r]+\.?/gi, '');
+    text = text.replace(/\bsz\s*\d{2}\s*[-–—]\s*\d{2}\b/gi, '');
+  }
+  if (hasColor) {
+    text = text.replace(/\bColou?rs?\s*[:：]\s*[^.\n\r]+\.?/gi, '');
+  }
+  // Also strip size ranges left inside Reference: lines (e.g. "Alo S-XL 25wrA20").
+  if (hasSize) {
+    text = text.replace(
+      /\b(?:XXS|XS|S|M|L|XL|XXL|\dXL)\s*[-–—]\s*(?:XXS|XS|S|M|L|XL|XXL|\dXL)\b/gi,
+      ''
+    );
+  }
+  return text
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+\./g, '.')
+    .replace(/\.\s*\./g, '.')
+    .trim();
 }
 
 /**

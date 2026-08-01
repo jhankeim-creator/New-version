@@ -21,8 +21,12 @@ function normAlpha(token) {
  */
 export function expandSizeToken(raw) {
   if (!raw || typeof raw !== 'string') return [];
-  const text = raw.trim().replace(/\.$/, '');
+  let text = raw.trim().replace(/\.$/, '');
   if (!text) return [];
+
+  // Wholesale shoe/pants style: "sz38-45" / "sz 35-40"
+  const sz = text.match(/^sz\s*(\d{2}\s*[-–—]\s*\d{2})$/i);
+  if (sz) text = sz[1];
 
   // Already a list: "S, M, L" or "S/M/L"
   if (/[,/|、，]/.test(text)) {

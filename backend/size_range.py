@@ -1,9 +1,10 @@
 """Expand clothing/shoe size ranges from wholesale titles/descriptions.
 
 Examples:
-  S-2XL  -> ["S", "M", "L", "XL", "2XL"]
-  M-3XL  -> ["M", "L", "XL", "2XL", "3XL"]
-  39-45  -> ["39", "40", ..., "45"]
+  S-2XL   -> ["S", "M", "L", "XL", "2XL"]
+  M-3XL   -> ["M", "L", "XL", "2XL", "3XL"]
+  39-45   -> ["39", "40", ..., "45"]
+  sz38-45 -> ["38", "39", ..., "45"]
 """
 from __future__ import annotations
 
@@ -19,6 +20,7 @@ _ALPHA_RANGE = re.compile(
 )
 _NUM_RANGE = re.compile(r"^(\d{2})\s*[-–—]\s*(\d{2})$")
 _SIZE_LABEL = re.compile(r"Sizes?\s*[:：]\s*([^.\n\r]+)", re.I)
+_SZ_TOKEN = re.compile(r"\bsz\s*(\d{2}\s*[-–—]\s*\d{2})\b", re.I)
 
 
 def _norm_alpha(token: str) -> str:
@@ -42,10 +44,13 @@ def expand_size_token(raw: str) -> List[str]:
     if not text:
         return []
 
+    m_sz = re.match(r"^sz\s*(\d{2}\s*[-–—]\s*\d{2})$", text, re.I)
+    if m_sz:
+        text = m_sz.group(1)
+
     if re.search(r"[,/|、，]", text):
         parts = [p.strip() for p in re.split(r"\s*[,/|、，]\s*", text) if p.strip()]
         if len(parts) >= 2:
-            # dedupe preserve order
             seen, out = set(), []
             for p in parts:
                 if p not in seen:
@@ -78,9 +83,12 @@ def size_variants_from_text(*texts: str) -> List[dict]:
         m = _SIZE_LABEL.search(text)
         token = m.group(1).strip() if m else ""
         if not token:
-            # bare range somewhere in the text
+            m_sz = _SZ_TOKEN.search(text)
+            if m_sz:
+                token = m_sz.group(1)
+        if not token:
             m2 = re.search(
-                r"\b((?:XXS|XS|S|M|L|XL|XXL|\dXL)\s*[-–—]\s*(?:XXS|XS|S|M|L|XL|XXL|\dXL|\dXL)"
+                r"\b((?:XXS|XS|S|M|L|XL|XXL|\dXL)\s*[-–—]\s*(?:XXS|XS|S|M|L|XL|XXL|\dXL)"
                 r"|\d{2}\s*[-–—]\s*\d{2})\b",
                 text,
                 re.I,

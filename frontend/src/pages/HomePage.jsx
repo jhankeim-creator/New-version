@@ -212,14 +212,14 @@ const HomePage = () => {
                   {/* Always-dark overlay so the label stays readable even when a
                       category has no image (mother categories aggregate). */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/10"></div>
-                  <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+                  <div className="absolute bottom-0 left-0 right-0 p-4 pt-8 text-white bg-gradient-to-t from-black/80 via-black/55 to-transparent">
                     <h3
-                      className="text-xl font-bold mb-1 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]"
+                      className="text-xl font-bold mb-1 drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)]"
                       style={{ fontFamily: 'Playfair Display' }}
                     >
                       {category.name}
                     </h3>
-                    <p className="text-sm text-white/90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">{category.description}</p>
+                    <p className="text-sm text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]">{category.description}</p>
                   </div>
                 </div>
               </Link>

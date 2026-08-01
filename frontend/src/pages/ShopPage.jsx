@@ -367,17 +367,18 @@ const ShopPage = () => {
 
           {/* Pagination */}
           {totalProducts > productsPerPage && (
-            <div className="mt-12 flex justify-center items-center gap-2">
+            <div className="mt-12 flex flex-wrap justify-center items-center gap-2">
               <Button
                 onClick={() => handlePageChange(page - 1)}
                 disabled={page === 1}
                 variant="outline"
+                size="sm"
                 data-testid="prev-page"
               >
                 Previous
               </Button>
               
-              <div className="flex gap-2">
+              <div className="flex flex-wrap justify-center gap-2">
                 {[...Array(Math.min(5, totalPages))].map((_, idx) => {
                   let pageNumber;
                   if (totalPages <= 5) {
@@ -395,7 +396,8 @@ const ShopPage = () => {
                       key={pageNumber}
                       onClick={() => handlePageChange(pageNumber)}
                       variant={page === pageNumber ? "default" : "outline"}
-                      className={page === pageNumber ? "btn-gold text-white" : ""}
+                      size="sm"
+                      className={`w-9 px-0 ${page === pageNumber ? "btn-gold text-white" : ""}`}
                       data-testid={`page-${pageNumber}`}
                     >
                       {pageNumber}
@@ -408,12 +410,13 @@ const ShopPage = () => {
                 onClick={() => handlePageChange(page + 1)}
                 disabled={page === totalPages}
                 variant="outline"
+                size="sm"
                 data-testid="next-page"
               >
                 Next
               </Button>
               
-              <span className="ml-4 text-gray-600">
+              <span className="w-full text-center text-sm text-gray-600 mt-2 sm:w-auto sm:mt-0 sm:ml-4">
                 Page {page} of {totalPages} ({totalProducts} products)
               </span>
             </div>

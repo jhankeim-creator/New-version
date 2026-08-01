@@ -83,3 +83,67 @@ export function categoryParent(cat) {
   if (PARENT_NAMES[prefix]) return { slug: prefix, name: PARENT_NAMES[prefix] };
   return { slug, name: cat.name };
 }
+
+// Nicely display a mother-category name (drop the "All " prefix used by the
+// importer, e.g. "All Bags" -> "Bags").
+export function displayCategoryName(name) {
+  return (name || "").replace(/^all\s+/i, "").trim() || name;
+}
+
+/**
+ * Build a nested category tree from the flat list returned by
+ * /categories/with-counts, using the backend `parent` field.
+ *
+ * - Each node gets `children` and a `total` = its own product_count plus the
+ *   product_count of all descendants (so mother categories like "Jewelry",
+ *   which hold no products directly, still count their sub-categories).
+ * - Branches whose total is 0 are pruned so empty categories never show.
+ * - Children are ordered by section priority, then brand priority, then count.
+ *
+ * This groups sub-categories UNDER their mother category (e.g. Jewelry ->
+ * Necklace -> LV) instead of listing every category flat in one menu.
+ */
+export function buildCategoryTree(cats) {
+  const list = Array.isArray(cats) ? cats : [];
+  const bySlug = new Map();
+  list.forEach((c) => {
+    if (c && c.slug) bySlug.set(c.slug, { ...c, children: [], total: 0 });
+  });
+
+  const roots = [];
+  bySlug.forEach((node) => {
+    const parentSlug =
+      node.parent && node.parent !== node.slug && bySlug.has(node.parent) ? node.parent : "";
+    if (parentSlug) bySlug.get(parentSlug).children.push(node);
+    else roots.push(node);
+  });
+
+  const sortNodes = (nodes) =>
+    nodes.sort(
+      (a, b) =>
+        parentRank(a.slug) - parentRank(b.slug) ||
+        brandRank(a.name) - brandRank(b.name) ||
+        (b.total || 0) - (a.total || 0) ||
+        String(a.name).localeCompare(String(b.name))
+    );
+
+  const computeTotal = (node) => {
+    let t = node.product_count || 0;
+    node.children.forEach((ch) => {
+      t += computeTotal(ch);
+    });
+    node.total = t;
+    sortNodes(node.children);
+    return t;
+  };
+  roots.forEach(computeTotal);
+
+  const prune = (nodes) =>
+    nodes
+      .filter((n) => (n.total || 0) > 0)
+      .map((n) => ({ ...n, children: prune(n.children) }));
+
+  const pruned = prune(roots);
+  sortNodes(pruned);
+  return pruned;
+}

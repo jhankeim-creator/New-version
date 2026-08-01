@@ -71,10 +71,18 @@ export function normalizeVariants(variants) {
   if (!Array.isArray(variants)) return [];
   return variants
     .filter((v) => v && v.name && Array.isArray(v.values) && v.values.length > 0)
-    .map((v) => ({
-      name: titleCase(String(v.name)),
-      values: [...new Set(v.values.map((x) => String(x).trim()).filter(Boolean))],
-    }))
+    .map((v) => {
+      const values = [...new Set(v.values.map((x) => String(x).trim()).filter(Boolean))];
+      // Carry optional per-value price adjustments ({ value: delta }).
+      const prices = {};
+      if (v.prices && typeof v.prices === 'object') {
+        for (const value of values) {
+          const delta = Number(v.prices[value]);
+          if (!Number.isNaN(delta) && delta !== 0) prices[value] = delta;
+        }
+      }
+      return { name: titleCase(String(v.name)), values, prices };
+    })
     .filter((v) => v.values.length > 0);
 }
 
@@ -92,6 +100,22 @@ export function getProductVariantGroups(product) {
     if (!byName.has(g.name.toLowerCase())) byName.set(g.name.toLowerCase(), g);
   }
   return Array.from(byName.values());
+}
+
+/**
+ * Total price adjustment for the currently-selected variant values, summing the
+ * optional per-value deltas defined on the variant groups. Returns 0 when none.
+ */
+export function variantPriceDelta(groups, selected) {
+  if (!Array.isArray(groups) || !selected) return 0;
+  let delta = 0;
+  for (const g of groups) {
+    const value = selected[g.name];
+    if (value && g.prices && typeof g.prices[value] === 'number') {
+      delta += g.prices[value];
+    }
+  }
+  return delta;
 }
 
 /** Build a short human-readable label, e.g. "Color: Red, Size: M". */

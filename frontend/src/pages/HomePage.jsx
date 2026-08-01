@@ -1,5 +1,5 @@
 import { useEffect, useState, useContext, useRef } from 'react';
-import { resolveImageUrl, categoryParent, parentRank } from '../lib/utils';
+import { resolveImageUrl, buildCategoryTree, displayCategoryName } from '../lib/utils';
 import { useSeo } from '../lib/seo';
 import { Link, useNavigate } from 'react-router-dom';
 import { ArrowRight, ShoppingBag, ChevronLeft, ChevronRight, Heart, Truck, ShieldCheck, Headphones, BadgeCheck } from 'lucide-react';
@@ -37,25 +37,28 @@ const HomePage = () => {
         axios.get(`${API}/products/best-sellers?limit=12`)
       ]);
       setFeaturedProducts(productsRes.data.slice(0, 30));
-      // Show one card per SECTION (e.g. Bags, Shoes, Jewelry, T-Shirt) rather
-      // than every brand, so the homepage stays clean. Sections are derived
-      // from the categories' section_slug; categories without a section fall
-      // back to themselves.
-      const bySection = new Map();
-      (categoriesRes.data || [])
-        .filter((c) => c.product_count > 0)
-        .forEach((c) => {
-          const parent = categoryParent(c);
-          const slug = parent.slug || c.slug;
-          const name = parent.name || c.name;
-          if (!bySection.has(slug)) {
-            bySection.set(slug, { id: slug, slug, name, description: '', image: c.image, total: 0 });
-          }
-          bySection.get(slug).total += c.product_count || 0;
-        });
-      // Preferred section order (Clothes, Shoes, Bags, Jewelry, Watches, ...).
-      setCategories(Array.from(bySection.values())
-        .sort((a, b) => parentRank(a.slug) - parentRank(b.slug) || b.total - a.total));
+      // Show one card per MOTHER category (Bags, Shoes, Jewelry, Watches,
+      // Clothes, Accessories) using the same tree as the menu, so the homepage
+      // mirrors the organised navigation instead of listing every sub-category.
+      const tree = buildCategoryTree(categoriesRes.data || []);
+      const firstImage = (node) => {
+        if (node.image) return node.image;
+        for (const ch of node.children || []) {
+          const img = firstImage(ch);
+          if (img) return img;
+        }
+        return '';
+      };
+      setCategories(
+        tree.map((node) => ({
+          id: node.slug,
+          slug: node.slug,
+          name: displayCategoryName(node.name),
+          description: `${node.total} item${node.total === 1 ? '' : 's'}`,
+          image: firstImage(node),
+          total: node.total,
+        }))
+      );
       
       // Ensure at least 3 best sellers are shown
       const sellers = bestSellersRes.data;
@@ -198,18 +201,25 @@ const HomePage = () => {
                 to={`/shop/${category.slug}`}
                 className="group relative overflow-hidden rounded-xl shadow-card ring-1 ring-black/5 hover:ring-gold-300 hover:shadow-luxe transition-all duration-300"
               >
-                <div className="aspect-square overflow-hidden">
+                <div className="aspect-square overflow-hidden bg-gradient-to-br from-ink to-[#2a2520]">
                   <img
                     src={resolveImageUrl(category.image)}
                     alt={category.name}
+                    loading="lazy"
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent"></div>
-                  <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
-                    <h3 className="text-xl font-bold mb-1" style={{ fontFamily: 'Playfair Display' }}>
+                  {/* Always-dark overlay so the label stays readable even when a
+                      category has no image (mother categories aggregate). */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/10"></div>
+                  <div className="absolute bottom-0 left-0 right-0 p-4 pt-8 text-white bg-gradient-to-t from-black/80 via-black/55 to-transparent">
+                    <h3
+                      className="text-xl font-bold mb-1 drop-shadow-[0_1px_3px_rgba(0,0,0,0.95)]"
+                      style={{ fontFamily: 'Playfair Display' }}
+                    >
                       {category.name}
                     </h3>
-                    <p className="text-sm opacity-90">{category.description}</p>
+                    <p className="text-sm text-white/95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.95)]">{category.description}</p>
                   </div>
                 </div>
               </Link>

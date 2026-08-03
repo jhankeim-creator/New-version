@@ -645,6 +645,15 @@ async def update_api_settings(settings: dict, admin: User = Depends(get_current_
             os.environ["STRIPE_SECRET_KEY"] = filtered_settings["stripe_secret_key"]
         if filtered_settings.get("stripe_publishable_key"):
             os.environ["STRIPE_PUBLISHABLE_KEY"] = filtered_settings["stripe_publishable_key"]
+        if filtered_settings.get("stripe_secret_key") or filtered_settings.get("stripe_publishable_key"):
+            try:
+                from stripe_service import set_stripe_key_cache
+                set_stripe_key_cache(
+                    secret=filtered_settings.get("stripe_secret_key"),
+                    publishable=filtered_settings.get("stripe_publishable_key"),
+                )
+            except Exception:
+                pass
         if filtered_settings.get("plisio_api_key"):
             os.environ["PLISIO_API_KEY"] = filtered_settings["plisio_api_key"]
             try:
@@ -675,6 +684,25 @@ async def test_plisio_api_key(admin: User = Depends(get_current_admin)):
     result = await plisio_service.verify_api_key()
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error") or "Plisio key failed")
+    return result
+
+
+@admin_router.post("/api-settings/test-stripe")
+async def test_stripe_api_key(admin: User = Depends(get_current_admin)):
+    """Verify saved Stripe keys against Stripe's API."""
+    from stripe_service import stripe_service, set_stripe_key_cache
+
+    settings = await db.api_settings.find_one({"_id": "global"}) or {}
+    sk = (settings.get("stripe_secret_key") or os.environ.get("STRIPE_SECRET_KEY") or "").strip()
+    pk = (settings.get("stripe_publishable_key") or os.environ.get("STRIPE_PUBLISHABLE_KEY") or "").strip()
+    if sk:
+        os.environ["STRIPE_SECRET_KEY"] = sk
+    if pk:
+        os.environ["STRIPE_PUBLISHABLE_KEY"] = pk
+    set_stripe_key_cache(secret=sk or None, publishable=pk or None)
+    result = await stripe_service.verify_api_key()
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error") or "Stripe key failed")
     return result
 
 

@@ -1334,6 +1334,21 @@ const AdminSettings = () => {
                   <CreditCard className="h-5 w-5 mr-2 text-blue-600" />
                   Stripe Payment Gateway
                 </h3>
+                <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-4">
+                  Use keys from{' '}
+                  <a
+                    href="https://dashboard.stripe.com/apikeys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline font-medium"
+                  >
+                    Stripe Dashboard → API keys
+                  </a>
+                  . Secret must start with <code className="font-mono">sk_live_</code> or{' '}
+                  <code className="font-mono">sk_test_</code>, publishable with{' '}
+                  <code className="font-mono">pk_live_</code> / <code className="font-mono">pk_test_</code>.
+                  Do not paste account IDs or other codes (e.g. values starting with <code className="font-mono">mk_</code>).
+                </p>
                 <div className="space-y-4">
                   <div>
                     <Label>Stripe Secret Key</Label>
@@ -1342,7 +1357,7 @@ const AdminSettings = () => {
                         type={showKeys.stripe_secret_key ? 'text' : 'password'}
                         value={apiKeys.stripe_secret_key}
                         onChange={(e) => setApiKeys({ ...apiKeys, stripe_secret_key: e.target.value })}
-                        placeholder="sk_test_..."
+                        placeholder="sk_live_… or sk_test_…"
                         className="flex-1"
                       />
                       <Button
@@ -1362,7 +1377,7 @@ const AdminSettings = () => {
                         type={showKeys.stripe_publishable_key ? 'text' : 'password'}
                         value={apiKeys.stripe_publishable_key}
                         onChange={(e) => setApiKeys({ ...apiKeys, stripe_publishable_key: e.target.value })}
-                        placeholder="pk_test_..."
+                        placeholder="pk_live_… or pk_test_…"
                         className="flex-1"
                       />
                       <Button
@@ -1375,6 +1390,37 @@ const AdminSettings = () => {
                       </Button>
                     </div>
                   </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={loading}
+                    onClick={async () => {
+                      try {
+                        setLoading(true);
+                        const headers = { Authorization: `Bearer ${token}` };
+                        if (
+                          (apiKeys.stripe_secret_key || '').trim() ||
+                          (apiKeys.stripe_publishable_key || '').trim()
+                        ) {
+                          await axios.post(`${API}/admin/api-settings`, apiKeys, { headers });
+                        }
+                        const res = await axios.post(
+                          `${API}/admin/api-settings/test-stripe`,
+                          {},
+                          { headers }
+                        );
+                        toast.success(res.data?.message || 'Stripe keys work');
+                      } catch (error) {
+                        toast.error(
+                          error?.response?.data?.detail || 'Stripe key test failed'
+                        );
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                  >
+                    Test Stripe keys
+                  </Button>
                 </div>
               </div>
 

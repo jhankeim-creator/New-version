@@ -1608,7 +1608,7 @@ async def create_order(
             payment_result = await stripe_service.create_payment_link(
                 order_id=order.id,
                 amount=order.total,
-                currency="USD",
+                currency="usd",
                 description=f"Order {order_number}",
                 customer_email=order.user_email
             )
@@ -2133,10 +2133,17 @@ async def get_checkout_payments():
     plisio_on = core.get("plisio", True)
     manual_on = core.get("manual", True)
 
-    has_stripe = bool(
-        (api.get("stripe_secret_key") or os.environ.get("STRIPE_SECRET_KEY") or "").strip()
-        and (api.get("stripe_publishable_key") or os.environ.get("STRIPE_PUBLISHABLE_KEY") or "").strip()
-    )
+    has_stripe = False
+    try:
+        from stripe_service import looks_like_stripe_secret, looks_like_stripe_publishable
+        sk = (api.get("stripe_secret_key") or os.environ.get("STRIPE_SECRET_KEY") or "").strip()
+        pk = (api.get("stripe_publishable_key") or os.environ.get("STRIPE_PUBLISHABLE_KEY") or "").strip()
+        has_stripe = looks_like_stripe_secret(sk) and looks_like_stripe_publishable(pk)
+    except Exception:
+        has_stripe = bool(
+            (api.get("stripe_secret_key") or os.environ.get("STRIPE_SECRET_KEY") or "").strip()
+            and (api.get("stripe_publishable_key") or os.environ.get("STRIPE_PUBLISHABLE_KEY") or "").strip()
+        )
     has_plisio = bool(
         (api.get("plisio_api_key") or os.environ.get("PLISIO_API_KEY") or "").strip()
     )
@@ -2195,18 +2202,26 @@ async def get_core_payment_methods(admin: User = Depends(get_current_admin)):
     settings = await db.admin_settings.find_one({"id": "admin_settings"}, {"_id": 0}) or {}
     core = settings.get("core_payment_methods") or {}
     api = await db.api_settings.find_one({"_id": "global"}) or {}
-    return {
+    out = {
         "stripe": core.get("stripe", True),
         "plisio": core.get("plisio", True),
         "manual": core.get("manual", True),
-        "stripe_configured": bool(
-            (api.get("stripe_secret_key") or os.environ.get("STRIPE_SECRET_KEY") or "").strip()
-            and (api.get("stripe_publishable_key") or os.environ.get("STRIPE_PUBLISHABLE_KEY") or "").strip()
-        ),
+        "stripe_configured": False,
         "plisio_configured": bool(
             (api.get("plisio_api_key") or os.environ.get("PLISIO_API_KEY") or "").strip()
         ),
     }
+    try:
+        from stripe_service import looks_like_stripe_secret, looks_like_stripe_publishable
+        sk = (api.get("stripe_secret_key") or os.environ.get("STRIPE_SECRET_KEY") or "").strip()
+        pk = (api.get("stripe_publishable_key") or os.environ.get("STRIPE_PUBLISHABLE_KEY") or "").strip()
+        out["stripe_configured"] = looks_like_stripe_secret(sk) and looks_like_stripe_publishable(pk)
+    except Exception:
+        out["stripe_configured"] = bool(
+            (api.get("stripe_secret_key") or os.environ.get("STRIPE_SECRET_KEY") or "").strip()
+            and (api.get("stripe_publishable_key") or os.environ.get("STRIPE_PUBLISHABLE_KEY") or "").strip()
+        )
+    return out
 
 
 @api_router.put("/admin/settings/core-payment-methods")
@@ -3091,6 +3106,14 @@ async def load_api_settings_into_env():
             set_plisio_api_key_cache(settings.get("plisio_api_key") or os.environ.get("PLISIO_API_KEY"))
         except Exception as cache_err:
             logger.warning("Could not warm Plisio key cache: %s", cache_err)
+        try:
+            from stripe_service import set_stripe_key_cache
+            set_stripe_key_cache(
+                secret=settings.get("stripe_secret_key") or os.environ.get("STRIPE_SECRET_KEY"),
+                publishable=settings.get("stripe_publishable_key") or os.environ.get("STRIPE_PUBLISHABLE_KEY"),
+            )
+        except Exception as cache_err:
+            logger.warning("Could not warm Stripe key cache: %s", cache_err)
 
         if loaded:
             logger.info(

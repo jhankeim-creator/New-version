@@ -53,7 +53,7 @@ PRICE_RANGES = {
     "jewelry-other": (80, 149),
     "jewelry": (80, 169),
     "bags": (129, 459),
-    "shoes": (99, 309),
+    "shoes": (250, 459),
     "watches": (159, 649),
     "glasses": (79, 189),
     "belts": (79, 139),

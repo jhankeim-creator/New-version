@@ -1617,6 +1617,9 @@ async def create_order(
                     "stripe_payment_id": payment_result.get('payment_id'),
                     "stripe_payment_url": payment_result.get('payment_url')
                 }
+            else:
+                err = payment_result.get("error") or "Stripe payment link failed"
+                raise HTTPException(status_code=502, detail=f"Card payment unavailable: {err}")
         
         elif order_data.payment_method == 'plisio':
             payment_result = await plisio_service.create_invoice(
@@ -1624,15 +1627,23 @@ async def create_order(
                 amount=order.total,
                 source_currency="USD",
                 description=f"Order {order_number}",
-                email=order.user_email
+                email=order.user_email,
             )
-            if payment_result.get('success'):
+            if payment_result.get('success') and payment_result.get('invoice_url'):
                 payment_info = {
                     "plisio_invoice_id": payment_result.get('invoice_id'),
                     "plisio_invoice_url": payment_result.get('invoice_url'),
                     "plisio_qr_code": payment_result.get('qr_code'),
-                    "plisio_wallet_hash": payment_result.get('wallet_hash')
+                    "plisio_wallet_hash": payment_result.get('wallet_hash'),
                 }
+            else:
+                # Don't leave the customer with a "successful" unpaid order and no pay link.
+                err = payment_result.get("error") or "Plisio invoice could not be created"
+                logger.error("Plisio invoice missing for order %s: %s", order.id, err)
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"Crypto payment unavailable: {err}. Re-save the Plisio key in Admin → API Keys.",
+                )
         
         # Mettre à jour la commande avec les infos de paiement
         if payment_info:
@@ -1644,8 +1655,24 @@ async def create_order(
             for key, value in payment_info.items():
                 setattr(order, key, value)
     
+    except HTTPException as http_exc:
+        # Roll back the pending order so checkout can retry cleanly.
+        try:
+            await db.orders.delete_one({"id": order.id, "payment_status": {"$ne": "confirmed"}})
+        except Exception:
+            pass
+        raise http_exc
     except Exception as e:
         logger.error(f"Failed to create payment for order {order.id}: {str(e)}")
+        if order_data.payment_method in ("plisio", "stripe"):
+            try:
+                await db.orders.delete_one({"id": order.id})
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=502,
+                detail=f"Payment provider error: {e}",
+            )
     
     # Envoyer email de confirmation au client avec instructions de paiement
     try:
@@ -3057,6 +3084,13 @@ async def load_api_settings_into_env():
             if value:
                 os.environ[env_key] = value
                 loaded.append(env_key)
+
+        # Keep Plisio in-process cache in sync so workers don't stay on demo mode
+        try:
+            from plisio_service import set_plisio_api_key_cache
+            set_plisio_api_key_cache(settings.get("plisio_api_key") or os.environ.get("PLISIO_API_KEY"))
+        except Exception as cache_err:
+            logger.warning("Could not warm Plisio key cache: %s", cache_err)
 
         if loaded:
             logger.info(

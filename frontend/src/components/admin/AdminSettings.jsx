@@ -1403,6 +1403,35 @@ const AdminSettings = () => {
                       {showKeys.plisio_api_key ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                     </Button>
                   </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    After saving, click Test to confirm Plisio accepts the key. Checkout will redirect customers to the crypto invoice.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mt-3"
+                    disabled={loading}
+                    onClick={async () => {
+                      try {
+                        setLoading(true);
+                        const headers = { Authorization: `Bearer ${token}` };
+                        // Persist first if the field has a value typed in
+                        if ((apiKeys.plisio_api_key || '').trim()) {
+                          await axios.post(`${API}/admin/api-settings`, apiKeys, { headers });
+                        }
+                        const res = await axios.post(`${API}/admin/api-settings/test-plisio`, {}, { headers });
+                        toast.success(res.data?.message || 'Plisio key works');
+                      } catch (error) {
+                        toast.error(
+                          error?.response?.data?.detail || 'Plisio key test failed'
+                        );
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                  >
+                    Test Plisio key
+                  </Button>
                 </div>
               </div>
 

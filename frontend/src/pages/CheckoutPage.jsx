@@ -199,13 +199,29 @@ const CheckoutPage = () => {
       };
 
       const response = await axios.post(`${API}/orders`, orderData);
-      setOrderPlaced(true);
+      const order = response.data || {};
       clearCart();
+      // Send the customer straight to the provider invoice/checkout when present.
+      if (order.plisio_invoice_url) {
+        toast.success('Redirecting to crypto payment…');
+        window.location.href = order.plisio_invoice_url;
+        return;
+      }
+      if (order.stripe_payment_url) {
+        toast.success('Redirecting to card payment…');
+        window.location.href = order.stripe_payment_url;
+        return;
+      }
+      setOrderPlaced(true);
       toast.success('Order placed successfully!');
-      navigate(`/order-success/${response.data.id}`);
+      navigate(`/order-success/${order.id}`);
     } catch (error) {
       console.error('Failed to create order:', error);
-      toast.error('Failed to place order. Please try again.');
+      const detail =
+        error?.response?.data?.detail ||
+        error?.message ||
+        'Failed to place order. Please try again.';
+      toast.error(typeof detail === 'string' ? detail : 'Failed to place order. Please try again.');
     } finally {
       setLoading(false);
     }

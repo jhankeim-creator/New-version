@@ -647,6 +647,11 @@ async def update_api_settings(settings: dict, admin: User = Depends(get_current_
             os.environ["STRIPE_PUBLISHABLE_KEY"] = filtered_settings["stripe_publishable_key"]
         if filtered_settings.get("plisio_api_key"):
             os.environ["PLISIO_API_KEY"] = filtered_settings["plisio_api_key"]
+            try:
+                from plisio_service import set_plisio_api_key_cache
+                set_plisio_api_key_cache(filtered_settings["plisio_api_key"])
+            except Exception:
+                pass
         if filtered_settings.get("from_email"):
             os.environ["FROM_EMAIL"] = filtered_settings["from_email"]
         if filtered_settings.get("from_name"):
@@ -655,4 +660,57 @@ async def update_api_settings(settings: dict, admin: User = Depends(get_current_
         return {"message": "API settings updated successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@admin_router.post("/api-settings/test-plisio")
+async def test_plisio_api_key(admin: User = Depends(get_current_admin)):
+    """Verify the saved Plisio API key against Plisio's API."""
+    from plisio_service import plisio_service, set_plisio_api_key_cache
+
+    settings = await db.api_settings.find_one({"_id": "global"}) or {}
+    key = (settings.get("plisio_api_key") or os.environ.get("PLISIO_API_KEY") or "").strip()
+    if key:
+        os.environ["PLISIO_API_KEY"] = key
+        set_plisio_api_key_cache(key)
+    result = await plisio_service.verify_api_key()
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error") or "Plisio key failed")
+    return result
+
+
+@admin_router.post("/orders/{order_id}/repair-plisio")
+async def repair_plisio_invoice(order_id: str, admin: User = Depends(get_current_admin)):
+    """Attach / recreate a Plisio invoice for an order that is missing the pay link."""
+    from plisio_service import plisio_service, set_plisio_api_key_cache
+
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.get("payment_method") != "plisio":
+        raise HTTPException(status_code=400, detail="Order is not a Plisio payment")
+
+    settings = await db.api_settings.find_one({"_id": "global"}) or {}
+    key = (settings.get("plisio_api_key") or "").strip()
+    if key:
+        os.environ["PLISIO_API_KEY"] = key
+        set_plisio_api_key_cache(key)
+
+    result = await plisio_service.create_invoice(
+        order_number=order["id"],
+        amount=float(order.get("total") or 0),
+        source_currency="USD",
+        description=f"Order {order.get('order_number')}",
+        email=order.get("user_email") or "",
+    )
+    if not result.get("success") or not result.get("invoice_url"):
+        raise HTTPException(status_code=502, detail=result.get("error") or "Could not create invoice")
+
+    payment_info = {
+        "plisio_invoice_id": result.get("invoice_id"),
+        "plisio_invoice_url": result.get("invoice_url"),
+        "plisio_qr_code": result.get("qr_code"),
+        "plisio_wallet_hash": result.get("wallet_hash"),
+    }
+    await db.orders.update_one({"id": order_id}, {"$set": payment_info})
+    return {"message": "Plisio invoice attached", **payment_info}
 

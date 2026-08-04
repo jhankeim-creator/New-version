@@ -558,28 +558,39 @@ async def bulk_update_prices(bulk_update: BulkPriceUpdate):
 @admin_router.post("/products/bulk/stock")
 async def bulk_update_stock(bulk_update: BulkStockUpdate):
     """Bulk update product stock"""
+    if bulk_update.operation == "set":
+        new_stock = max(0, int(bulk_update.value))
+        result = await db.products.update_many(
+            {"id": {"$in": bulk_update.product_ids}},
+            {"$set": {"stock": new_stock}},
+        )
+        return {
+            "message": f"Updated stock for {result.modified_count} products",
+            "count": result.modified_count,
+            "matched": result.matched_count,
+            "stock": new_stock,
+        }
+
     products = await db.products.find(
         {"id": {"$in": bulk_update.product_ids}},
         {"_id": 0, "id": 1, "stock": 1}
     ).to_list(None)
-    
+
     for product in products:
         new_stock = product["stock"]
-        
+
         if bulk_update.operation == "add":
             new_stock += bulk_update.value
         elif bulk_update.operation == "subtract":
             new_stock -= bulk_update.value
-        elif bulk_update.operation == "set":
-            new_stock = bulk_update.value
-        
-        new_stock = max(0, new_stock)  # Ensure non-negative
-        
+
+        new_stock = max(0, new_stock)
+
         await db.products.update_one(
             {"id": product["id"]},
             {"$set": {"stock": new_stock}}
         )
-    
+
     return {
         "message": f"Updated stock for {len(products)} products",
         "count": len(products)

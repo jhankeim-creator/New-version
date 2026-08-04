@@ -122,7 +122,7 @@ def main(argv=None):
     parser.add_argument("--per-cat", type=int, default=40, help="Max NEW products per top category.")
     parser.add_argument("--max-images", type=int, default=6)
     parser.add_argument("--delay", type=float, default=0.2)
-    parser.add_argument("--stock", type=int, default=10)
+    parser.add_argument("--stock", type=int, default=5000)
     args = parser.parse_args(argv)
 
     mongo_url = os.environ.get("MONGO_URL")

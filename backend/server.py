@@ -168,7 +168,7 @@ class ProductCreate(BaseModel):
     cost: Optional[float] = None
     images: List[str] = []
     category: str
-    stock: int = 0
+    stock: int = 5000
     sku: Optional[str] = None
     barcode: Optional[str] = None
     weight: Optional[float] = None
@@ -1293,6 +1293,36 @@ def _image_reachable(url: str, timeout: float) -> bool:
         return True
     except Exception:
         return False
+
+
+DEFAULT_PRODUCT_STOCK = 5000
+
+
+@api_router.post("/products/maintenance/set-stock")
+async def set_all_product_stock(
+    stock: int = DEFAULT_PRODUCT_STOCK,
+    apply: bool = False,
+    admin: User = Depends(get_current_admin),
+):
+    """Set stock for every product (default 5000). Dry-run unless apply=true."""
+    target = max(0, int(stock))
+    mismatched = await db.products.count_documents({"stock": {"$ne": target}})
+    total = await db.products.count_documents({})
+    if not apply:
+        return {
+            "apply": False,
+            "stock": target,
+            "total_products": total,
+            "would_update": mismatched,
+        }
+    result = await db.products.update_many({}, {"$set": {"stock": target}})
+    return {
+        "apply": True,
+        "stock": target,
+        "total_products": total,
+        "matched": result.matched_count,
+        "updated": result.modified_count,
+    }
 
 
 @api_router.post("/products/maintenance/shoe-price-floor")

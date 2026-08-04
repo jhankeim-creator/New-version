@@ -328,7 +328,7 @@ def parse_args(argv):
                    help="Max products per brand across all types (0 = none).")
     p.add_argument("--max-images", type=int, default=5, help="Max images/product (0 = all).")
     p.add_argument("--delay", type=float, default=0.25, help="Delay between requests (s).")
-    p.add_argument("--stock", type=int, default=10, help="Initial stock for new products.")
+    p.add_argument("--stock", type=int, default=5000, help="Initial stock for new products.")
     p.add_argument("--dry-run", action="store_true", help="Crawl + report only; no DB writes.")
     p.add_argument("--categories", default="",
                    help="Comma list of specific macc jewelry category IDs to crawl "

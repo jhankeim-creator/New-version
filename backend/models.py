@@ -17,7 +17,7 @@ class ProductVariation(BaseModel):
     name: str  # e.g., "Small - Red"
     sku: Optional[str] = None
     price_modifier: float = 0.0  # Additional price (+/-)
-    stock: int = 0
+    stock: int = 5000
     attributes: Dict[str, str] = {}  # {"size": "S", "color": "Red"}
     image: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -28,7 +28,7 @@ class ProductVariationCreate(BaseModel):
     name: str
     sku: Optional[str] = None
     price_modifier: float = 0.0
-    stock: int = 0
+    stock: int = 5000
     attributes: Dict[str, str] = {}
     image: Optional[str] = None
 
@@ -208,7 +208,7 @@ class ProductExtendedCreate(BaseModel):
     cost: Optional[float] = None
     images: List[str] = []
     category: str
-    stock: int = 0
+    stock: int = 5000
     sku: Optional[str] = None
     barcode: Optional[str] = None
     weight: Optional[float] = None

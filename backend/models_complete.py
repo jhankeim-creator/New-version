@@ -110,7 +110,7 @@ class ProductComplete(BaseModel):
     subcategory_id: Optional[str] = None
     
     # Inventory
-    stock: int = 0
+    stock: int = 5000
     sku: Optional[str] = None
     barcode: Optional[str] = None
     
@@ -152,7 +152,7 @@ class ProductCreateComplete(BaseModel):
     videos: List[str] = []
     category_id: str
     subcategory_id: Optional[str] = None
-    stock: int = 0
+    stock: int = 5000
     sku: Optional[str] = None
     barcode: Optional[str] = None
     meta_title: Optional[str] = None

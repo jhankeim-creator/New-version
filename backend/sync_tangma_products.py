@@ -642,7 +642,7 @@ def parse_args(argv):
                         "for variety within a category (0 = none).")
     p.add_argument("--max-images", type=int, default=6, help="Max images/product (0 = all).")
     p.add_argument("--delay", type=float, default=0.3, help="Delay between requests (s).")
-    p.add_argument("--stock", type=int, default=10, help="Initial stock for new products.")
+    p.add_argument("--stock", type=int, default=5000, help="Initial stock for new products.")
     p.add_argument("--dry-run", action="store_true", help="Crawl + report only; no DB writes.")
     p.add_argument("--replace", action="store_true",
                    help="DELETE all products + categories first, then import.")

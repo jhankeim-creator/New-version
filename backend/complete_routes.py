@@ -57,7 +57,7 @@ class ProductCreateV2(BaseModel):
     description: str
     price: float
     compare_at_price: Optional[float] = None
-    stock: int = 0
+    stock: int = 5000
     sku: Optional[str] = None
 
     # Categorization (v2 categories)

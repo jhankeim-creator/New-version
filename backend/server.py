@@ -2860,6 +2860,10 @@ app.include_router(blog_router)
 
 # ===== SEO: sitemap.xml & robots.txt =====
 
+PRODUCTS_PER_SITEMAP = 800  # keep each child sitemap small/fast for crawlers
+API_PUBLIC_ORIGIN = (os.environ.get("API_PUBLIC_URL") or "https://api.kayee01.com").rstrip("/")
+
+
 def _public_base_url() -> str:
     """Canonical storefront URL for sitemap/robots (Google Search Console).
 
@@ -2884,35 +2888,118 @@ def _xml_escape(text: str) -> str:
     )
 
 
-@app.get("/sitemap.xml")
-async def sitemap():
-    """Automatically generated sitemap covering static pages, categories,
-    products (by slug when available) and blog posts."""
+def _html_escape(text: str) -> str:
+    return (
+        str(text or "")
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _seo_image_url(path: Optional[str]) -> str:
+    """Absolute product/blog image URL for crawlers."""
+    if not path or not isinstance(path, str):
+        return f"{_public_base_url()}/favicon.svg"
+    trimmed = path.strip()
+    if not trimmed:
+        return f"{_public_base_url()}/favicon.svg"
+    if trimmed.startswith("//"):
+        return f"https:{trimmed}"
+    if re.match(r"^https?:", trimmed, re.I):
+        return trimmed
+    if trimmed.startswith("/uploads"):
+        return f"{API_PUBLIC_ORIGIN}{trimmed}"
+    if trimmed.startswith("/"):
+        return f"{_public_base_url()}{trimmed}"
+    return trimmed
+
+
+def _xml_response(xml: str) -> Response:
+    return Response(
+        content=xml,
+        media_type="application/xml",
+        headers={"Cache-Control": "public, max-age=1800"},
+    )
+
+
+def _urlset(entries: list) -> str:
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        + "\n".join(entries)
+        + "\n</urlset>"
+    )
+
+
+def _url_entry(loc: str, lastmod: str, changefreq: str, priority: str) -> str:
+    return (
+        f"<url><loc>{_xml_escape(loc)}</loc>"
+        f"<lastmod>{_xml_escape(lastmod)}</lastmod>"
+        f"<changefreq>{changefreq}</changefreq>"
+        f"<priority>{priority}</priority></url>"
+    )
+
+
+@app.api_route("/sitemap.xml", methods=["GET", "HEAD"])
+async def sitemap_index():
+    """Sitemap index — split so Google/Vercel never time out on ~4.5k URLs."""
     base = _public_base_url()
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    urls = []
+    try:
+        product_count = await db.products.count_documents({})
+    except Exception:
+        product_count = 0
+    product_pages = max(1, (int(product_count) + PRODUCTS_PER_SITEMAP - 1) // PRODUCTS_PER_SITEMAP)
+
+    locs = [f"{base}/sitemap-static.xml"]
+    locs.extend(f"{base}/sitemap-products-{i}.xml" for i in range(1, product_pages + 1))
+    locs.append(f"{base}/sitemap-blog.xml")
+
+    body = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        + "\n".join(
+            f"<sitemap><loc>{_xml_escape(loc)}</loc><lastmod>{now}</lastmod></sitemap>"
+            for loc in locs
+        )
+        + "\n</sitemapindex>"
+    )
+    return _xml_response(body)
+
+
+@app.api_route("/sitemap-static.xml", methods=["GET", "HEAD"])
+async def sitemap_static():
+    """Homepage, shop, categories, and policy pages."""
+    base = _public_base_url()
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    entries = []
     seen = set()
 
-    def add(loc: str, changefreq: str = "weekly", priority: str = "0.6", lastmod: str = now):
-        # Normalize path: no query, no trailing slash (except homepage).
-        path = (loc or "/").split("?")[0].split("#")[0] or "/"
-        if not path.startswith("/"):
-            path = f"/{path}"
-        if path != "/" and path.endswith("/"):
-            path = path.rstrip("/")
-        if path in seen:
+    def add(path: str, changefreq: str = "weekly", priority: str = "0.6", lastmod: str = now):
+        p = (path or "/").split("?")[0].split("#")[0] or "/"
+        if not p.startswith("/"):
+            p = f"/{p}"
+        if p != "/" and p.endswith("/"):
+            p = p.rstrip("/")
+        if p in seen:
             return
-        seen.add(path)
-        urls.append(
-            f"<url><loc>{_xml_escape(base + path)}</loc>"
-            f"<lastmod>{_xml_escape(lastmod)}</lastmod>"
-            f"<changefreq>{changefreq}</changefreq>"
-            f"<priority>{priority}</priority></url>"
-        )
+        seen.add(p)
+        loc = base if p == "/" else f"{base}{p}"
+        if p == "/":
+            loc = f"{base}/"
+        entries.append(_url_entry(loc, lastmod, changefreq, priority))
 
-    for path, pr in [("/", "1.0"), ("/shop", "0.9"), ("/blog", "0.7"),
-                     ("/track-order", "0.4"), ("/faq", "0.3"), ("/terms", "0.2"),
-                     ("/refund-policy", "0.2")]:
+    for path, pr in [
+        ("/", "1.0"),
+        ("/shop", "0.9"),
+        ("/blog", "0.7"),
+        ("/track-order", "0.4"),
+        ("/faq", "0.3"),
+        ("/terms", "0.2"),
+        ("/refund-policy", "0.2"),
+    ]:
         add(path, "weekly", pr)
 
     try:
@@ -2923,47 +3010,219 @@ async def sitemap():
     except Exception:
         pass
 
+    return _xml_response(_urlset(entries))
+
+
+@app.api_route("/sitemap-products-{page}.xml", methods=["GET", "HEAD"])
+async def sitemap_products(page: int):
+    """Chunked product URLs (slug preferred over UUID)."""
+    if page < 1 or page > 200:
+        raise HTTPException(status_code=404, detail="Sitemap page not found")
+    base = _public_base_url()
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    skip = (page - 1) * PRODUCTS_PER_SITEMAP
+    entries = []
     try:
         products = await db.products.find(
             {}, {"_id": 0, "id": 1, "slug": 1, "updated_at": 1}
-        ).limit(5000).to_list(5000)
-        for p in products:
-            # Prefer slug only — UUID URLs are duplicates of the slug page.
-            ident = p.get("slug") or p.get("id")
-            if not ident:
-                continue
-            lm = now
-            if isinstance(p.get("updated_at"), str):
-                lm = p["updated_at"][:10]
-            add(f"/product/{ident}", "weekly", "0.8", lm)
+        ).skip(skip).limit(PRODUCTS_PER_SITEMAP).to_list(PRODUCTS_PER_SITEMAP)
     except Exception:
-        pass
+        products = []
 
+    if page > 1 and not products:
+        raise HTTPException(status_code=404, detail="Sitemap page not found")
+
+    for p in products:
+        ident = p.get("slug") or p.get("id")
+        if not ident:
+            continue
+        lm = now
+        if isinstance(p.get("updated_at"), str):
+            lm = p["updated_at"][:10]
+        entries.append(_url_entry(f"{base}/product/{ident}", lm, "weekly", "0.8"))
+
+    return _xml_response(_urlset(entries))
+
+
+@app.api_route("/sitemap-blog.xml", methods=["GET", "HEAD"])
+async def sitemap_blog():
+    base = _public_base_url()
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    entries = []
     try:
         posts = await db.blog_posts.find(
             {"published": True}, {"_id": 0, "slug": 1, "created_at": 1}
         ).limit(1000).to_list(1000)
-        for post in posts:
-            if post.get("slug"):
-                lm = post.get("created_at", now)[:10] if isinstance(post.get("created_at"), str) else now
-                add(f"/blog/{post['slug']}", "monthly", "0.6", lm)
     except Exception:
-        pass
+        posts = []
+    for post in posts:
+        if not post.get("slug"):
+            continue
+        lm = now
+        if isinstance(post.get("created_at"), str):
+            lm = post["created_at"][:10]
+        entries.append(_url_entry(f"{base}/blog/{post['slug']}", lm, "monthly", "0.6"))
+    return _xml_response(_urlset(entries))
 
-    xml = (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
-        + "\n".join(urls)
-        + "\n</urlset>"
+
+@app.api_route("/seo/product/{ident}", methods=["GET", "HEAD"])
+async def seo_product_html(ident: str):
+    """Bot-friendly HTML shell for product URLs (SPA has empty #root without JS).
+
+    Vercel middleware rewrites Googlebot/etc. here so crawlers see real title,
+    description, image and Product JSON-LD instead of a blank React shell.
+    """
+    product = await db.products.find_one({"slug": ident}, {"_id": 0})
+    if not product:
+        product = await db.products.find_one({"id": ident}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    base = _public_base_url()
+    slug = product.get("slug") or product.get("id") or ident
+    canonical = f"{base}/product/{slug}"
+    name = str(product.get("name") or "Product").strip() or "Product"
+    title = str(product.get("meta_title") or name).strip()
+    raw_desc = (
+        product.get("meta_description")
+        or product.get("description")
+        or f"Shop {name} at Kayee01."
     )
+    desc = re.sub(r"\s+", " ", str(raw_desc)).strip()[:320]
+    images = product.get("images") or []
+    image = _seo_image_url(images[0] if images else None)
+    try:
+        price = float(product.get("price") or 0)
+    except (TypeError, ValueError):
+        price = 0.0
+    brand = str(product.get("brand") or "Kayee01").strip() or "Kayee01"
+    category = str(product.get("category") or "").strip()
+    availability = (
+        "https://schema.org/InStock"
+        if float(product.get("stock") or 0) > 0
+        else "https://schema.org/OutOfStock"
+    )
+
+    import json as _json
+
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "name": name,
+        "description": desc,
+        "image": [image],
+        "sku": str(product.get("id") or slug),
+        "brand": {"@type": "Brand", "name": brand},
+        "offers": {
+            "@type": "Offer",
+            "url": canonical,
+            "priceCurrency": "USD",
+            "price": f"{price:.2f}",
+            "availability": availability,
+        },
+    }
+    if category:
+        schema["category"] = category
+    schema_json = _json.dumps(schema, ensure_ascii=False).replace("<", "\\u003c")
+    cat_crumb = (
+        f' / <a href="{_html_escape(base)}/shop/{_html_escape(category)}">'
+        f"{_html_escape(category)}</a>"
+        if category
+        else ""
+    )
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>{_html_escape(title)} | Kayee01</title>
+<meta name="description" content="{_html_escape(desc)}"/>
+<meta name="robots" content="index, follow"/>
+<link rel="canonical" href="{_html_escape(canonical)}"/>
+<meta property="og:type" content="product"/>
+<meta property="og:site_name" content="Kayee01"/>
+<meta property="og:title" content="{_html_escape(title)} | Kayee01"/>
+<meta property="og:description" content="{_html_escape(desc)}"/>
+<meta property="og:url" content="{_html_escape(canonical)}"/>
+<meta property="og:image" content="{_html_escape(image)}"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="{_html_escape(title)} | Kayee01"/>
+<meta name="twitter:description" content="{_html_escape(desc)}"/>
+<meta name="twitter:image" content="{_html_escape(image)}"/>
+<script type="application/ld+json">{schema_json}</script>
+</head>
+<body>
+<main>
+  <nav><a href="{_html_escape(base)}/">Kayee01</a> /
+    <a href="{_html_escape(base)}/shop">Shop</a>{cat_crumb}
+  </nav>
+  <h1>{_html_escape(name)}</h1>
+  <p class="price">${price:.2f} USD</p>
+  <img src="{_html_escape(image)}" alt="{_html_escape(name)}" width="600" height="600"/>
+  <p>{_html_escape(desc)}</p>
+  <p><a href="{_html_escape(canonical)}">View {_html_escape(name)} at Kayee01</a></p>
+</main>
+</body>
+</html>"""
     return Response(
-        content=xml,
-        media_type="application/xml",
-        headers={"Cache-Control": "public, max-age=3600"},
+        content=html,
+        media_type="text/html; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=600"},
     )
 
 
-@app.get("/robots.txt")
+@app.api_route("/seo/blog/{slug}", methods=["GET", "HEAD"])
+async def seo_blog_html(slug: str):
+    """Bot-friendly HTML for published blog posts."""
+    posts = await db.blog_posts.find({"slug": slug, "published": True}, {"_id": 0}).limit(1).to_list(1)
+    post = posts[0] if posts else None
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    base = _public_base_url()
+    canonical = f"{base}/blog/{slug}"
+    title = str(post.get("title") or slug).strip()
+    raw = post.get("excerpt") or post.get("content") or title
+    # Strip crude HTML tags from markdown/html content for meta
+    desc = re.sub(r"<[^>]+>", " ", str(raw))
+    desc = re.sub(r"\s+", " ", desc).strip()[:320]
+    image = _seo_image_url(post.get("cover_image"))
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>{_html_escape(title)} | Kayee01</title>
+<meta name="description" content="{_html_escape(desc)}"/>
+<meta name="robots" content="index, follow"/>
+<link rel="canonical" href="{_html_escape(canonical)}"/>
+<meta property="og:type" content="article"/>
+<meta property="og:site_name" content="Kayee01"/>
+<meta property="og:title" content="{_html_escape(title)}"/>
+<meta property="og:description" content="{_html_escape(desc)}"/>
+<meta property="og:url" content="{_html_escape(canonical)}"/>
+<meta property="og:image" content="{_html_escape(image)}"/>
+</head>
+<body>
+<main>
+  <nav><a href="{_html_escape(base)}/">Kayee01</a> / <a href="{_html_escape(base)}/blog">Blog</a></nav>
+  <h1>{_html_escape(title)}</h1>
+  <img src="{_html_escape(image)}" alt="{_html_escape(title)}" width="800"/>
+  <p>{_html_escape(desc)}</p>
+  <p><a href="{_html_escape(canonical)}">Read on Kayee01</a></p>
+</main>
+</body>
+</html>"""
+    return Response(
+        content=html,
+        media_type="text/html; charset=utf-8",
+        headers={"Cache-Control": "public, max-age=600"},
+    )
+
+
+@app.api_route("/robots.txt", methods=["GET", "HEAD"])
 async def robots():
     base = _public_base_url()
     body = (

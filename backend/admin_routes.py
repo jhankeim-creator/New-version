@@ -525,9 +525,11 @@ async def bulk_update_products(bulk_update: BulkProductUpdate):
 @admin_router.post("/products/bulk/price")
 async def bulk_update_prices(bulk_update: BulkPriceUpdate):
     """Bulk update product prices"""
+    from server import _apply_category_price_floors
+
     products = await db.products.find(
         {"id": {"$in": bulk_update.product_ids}},
-        {"_id": 0, "id": 1, "price": 1}
+        {"_id": 0}
     ).to_list(None)
     
     for product in products:
@@ -543,6 +545,9 @@ async def bulk_update_prices(bulk_update: BulkPriceUpdate):
             new_price = bulk_update.value
         
         new_price = max(0, new_price)  # Ensure non-negative
+        product["price"] = new_price
+        _apply_category_price_floors(product)
+        new_price = product["price"]
         
         await db.products.update_one(
             {"id": product["id"]},

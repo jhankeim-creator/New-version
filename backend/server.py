@@ -1175,6 +1175,7 @@ async def get_product(product_id: str):
     return _product_response(parse_from_mongo(product))
 
 SHOES_MIN_PRICE = 250.0
+WATCHES_MIN_PRICE = 450.0
 
 
 def _is_shoe_product(product: dict) -> bool:
@@ -1195,6 +1196,26 @@ def _is_shoe_product(product: dict) -> bool:
     return False
 
 
+def _is_watch_product(product: dict) -> bool:
+    """True when the product belongs to watches / smart-watch categories."""
+    cat = str(product.get("category") or "").strip().lower()
+    section = str(product.get("section") or product.get("type_name") or "").strip().lower()
+    if cat in ("watches", "watch", "smart-watch", "smartwatch"):
+        return True
+    if cat.startswith("watches-") or cat.startswith("watch-"):
+        return True
+    if section in ("watches", "watch", "all watches", "smart watch", "smart-watch"):
+        return True
+    tags = product.get("tags") or []
+    if isinstance(tags, list):
+        blob = " ".join(str(t) for t in tags).lower()
+    else:
+        blob = str(tags).lower()
+    if "watch" in blob:
+        return True
+    return False
+
+
 def _apply_shoe_price_floor(product: dict) -> bool:
     """Raise shoe prices below the floor. Returns True if price was changed."""
     if not _is_shoe_product(product):
@@ -1209,13 +1230,37 @@ def _apply_shoe_price_floor(product: dict) -> bool:
     return True
 
 
+def _apply_watch_price_floor(product: dict) -> bool:
+    """Raise watch prices below the floor. Returns True if price was changed."""
+    if not _is_watch_product(product):
+        return False
+    try:
+        price = float(product.get("price") or 0)
+    except (TypeError, ValueError):
+        price = 0.0
+    if price >= WATCHES_MIN_PRICE:
+        return False
+    product["price"] = float(WATCHES_MIN_PRICE)
+    return True
+
+
+def _apply_category_price_floors(product: dict) -> bool:
+    """Apply all category minimums (shoes, watches). Returns True if any change."""
+    changed = False
+    if _apply_shoe_price_floor(product):
+        changed = True
+    if _apply_watch_price_floor(product):
+        changed = True
+    return changed
+
+
 @api_router.post("/products", response_model=Product)
 async def create_product(product_data: ProductCreate, admin: User = Depends(get_current_admin)):
     product = Product(**product_data.model_dump())
     if not product.slug:
         product.slug = await unique_product_slug(product.name)
     product_doc = prepare_for_mongo(product.model_dump())
-    _apply_shoe_price_floor(product_doc)
+    _apply_category_price_floors(product_doc)
     await db.products.insert_one(product_doc)
     return product
 
@@ -1232,9 +1277,9 @@ async def update_product(product_id: str, product_data: ProductUpdate, admin: Us
     if update_data.get("name") and not (existing or {}).get("slug"):
         update_data["slug"] = await unique_product_slug(update_data["name"], exclude_id=product_id)
 
-    # Enforce shoe minimum against the merged category/price.
+    # Enforce category minimums against the merged category/price.
     merged = {**(existing or {}), **update_data}
-    if _apply_shoe_price_floor(merged):
+    if _apply_category_price_floors(merged):
         update_data["price"] = merged["price"]
     
     result = await db.products.update_one(
@@ -1368,6 +1413,68 @@ async def enforce_shoe_price_floor(
             "sample": [
                 {"id": p["id"], "name": p.get("name"), "price": p.get("price"),
                  "new_price": floor}
+                for p in products[:15]
+            ],
+        }
+
+    updated = 0
+    for p in products:
+        res = await db.products.update_one(
+            {"id": p["id"]},
+            {"$set": {"price": floor, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        updated += res.modified_count
+
+    return {
+        "apply": True,
+        "floor": floor,
+        "updated": updated,
+        "matched": len(products),
+    }
+
+
+@api_router.post("/products/maintenance/watch-price-floor")
+async def enforce_watch_price_floor(
+    apply: bool = False,
+    floor: float = WATCHES_MIN_PRICE,
+    admin: User = Depends(get_current_admin),
+):
+    """Raise every watch product priced below ``floor`` (default $450).
+
+    Dry-run by default; pass ``apply=true`` to write.
+    """
+    floor = float(max(floor, WATCHES_MIN_PRICE))
+    query = {
+        "$or": [
+            {"category": {"$regex": r"^(watches?|smart-?watch)", "$options": "i"}},
+            {"section": {"$regex": r"watch", "$options": "i"}},
+            {"tags": {"$regex": r"watch", "$options": "i"}},
+        ],
+        "price": {"$lt": floor},
+    }
+    products = await db.products.find(
+        query, {"_id": 0, "id": 1, "name": 1, "price": 1, "category": 1}
+    ).to_list(length=None)
+
+    extra = await db.products.find(
+        {"price": {"$lt": floor}},
+        {"_id": 0, "id": 1, "name": 1, "price": 1, "category": 1, "section": 1,
+         "type_name": 1, "tags": 1},
+    ).to_list(length=None)
+    by_id = {p["id"]: p for p in products}
+    for p in extra:
+        if p["id"] not in by_id and _is_watch_product(p):
+            by_id[p["id"]] = p
+    products = list(by_id.values())
+
+    if not apply:
+        return {
+            "apply": False,
+            "floor": floor,
+            "would_update": len(products),
+            "sample": [
+                {"id": p["id"], "name": p.get("name"), "price": p.get("price"),
+                 "new_price": floor, "category": p.get("category")}
                 for p in products[:15]
             ],
         }

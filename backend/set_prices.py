@@ -54,7 +54,7 @@ PRICE_RANGES = {
     "jewelry": (80, 169),
     "bags": (129, 459),
     "shoes": (250, 459),
-    "watches": (159, 649),
+    "watches": (450, 899),
     "glasses": (79, 189),
     "belts": (79, 139),
     "hats": (79, 119),
@@ -69,7 +69,18 @@ DEFAULT_RANGE = (80, 179)
 
 def price_for(product, floor):
     section = (product.get("section") or product.get("type_name") or "").strip().lower()
-    lo, hi = PRICE_RANGES.get(section, DEFAULT_RANGE)
+    category = (product.get("category") or "").strip().lower()
+    # Watches (incl. smart-watch / "All Watches") use the watches range + $450 floor.
+    if (
+        "watch" in section
+        or category in ("watches", "watch", "smart-watch", "smartwatch")
+        or category.startswith("watches-")
+        or category.startswith("watch-")
+    ):
+        lo, hi = PRICE_RANGES["watches"]
+        floor = max(float(floor), 450.0)
+    else:
+        lo, hi = PRICE_RANGES.get(section, DEFAULT_RANGE)
     lo = int(max(lo, floor))
     hi = int(max(hi, lo + 20))
     seed = (product.get("id") or product.get("source_id") or product.get("name") or "x")
@@ -100,7 +111,18 @@ def main(argv=None):
 
     query = {"price": {"$lte": 0}} if args.only_zero else {"price": {"$lt": args.floor}}
     products = list(db.products.find(query, {"_id": 0, "id": 1, "name": 1, "section": 1,
-                                             "type_name": 1, "source_id": 1, "price": 1}))
+                                             "type_name": 1, "category": 1, "source_id": 1, "price": 1}))
+    # Also include watches below $450 even when the global --floor is lower.
+    if not args.only_zero and args.floor < 450:
+        extra = list(db.products.find(
+            {"price": {"$lt": 450}, "category": {"$regex": r"watch", "$options": "i"}},
+            {"_id": 0, "id": 1, "name": 1, "section": 1, "type_name": 1,
+             "category": 1, "source_id": 1, "price": 1},
+        ))
+        by_id = {p["id"]: p for p in products}
+        for p in extra:
+            by_id.setdefault(p["id"], p)
+        products = list(by_id.values())
     print(f"DB: {db.name} | products below floor (${args.floor:g}): {len(products)}")
 
     updates = []

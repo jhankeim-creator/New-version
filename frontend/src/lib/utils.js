@@ -38,6 +38,7 @@ export const PARENT_NAMES = {
   shoes: "All Shoes",
   jewelry: "All Jewelry",
   watches: "All Watches",
+  electronics: "All Electronics",
 };
 
 const TYPE_TO_PARENT = {
@@ -45,6 +46,7 @@ const TYPE_TO_PARENT = {
   "down-jacket": "clothing", swimwear: "clothing", kids: "clothing",
   glasses: "accessories", belts: "accessories", hats: "accessories",
   perfume: "accessories", socks: "accessories", scarf: "accessories",
+  "smart-watch": "electronics",
 };
 
 // Priority brands that should appear first within each category, in order.
@@ -54,6 +56,7 @@ export const PRIORITY_BRANDS = [
   "chanel", "hermes", "prada", "versace", "bvlgari", "audemars piguet",
   "patek", "richard mille", "celine", "burberry", "fendi", "ysl",
   "saint laurent", "bottega", "amiri", "tiffany",
+  "apple", "beats", "samsung", "jbl", "marshall",
 ];
 
 export function brandRank(name) {
@@ -68,7 +71,7 @@ export function brandRank(name) {
 export const PARENT_ORDER = [
   "clothing", "shoes", "bags",
   "jewelry", "necklace", "ring", "bracelet", "brooch", "earrings", "jewelry-other",
-  "watches", "accessories",
+  "watches", "electronics", "accessories",
 ];
 export function parentRank(slug) {
   const i = PARENT_ORDER.indexOf(slug);
@@ -121,8 +124,16 @@ export function buildCategoryTree(cats) {
 
   const roots = [];
   bySlug.forEach((node) => {
-    const parentSlug =
+    let parentSlug =
       node.parent && node.parent !== node.slug && bySlug.has(node.parent) ? node.parent : "";
+    // Infer parent from slug / section when backend hierarchy fields are missing
+    // (e.g. electronics-headphones -> electronics).
+    if (!parentSlug) {
+      const inferred = categoryParent(node);
+      if (inferred.slug && inferred.slug !== node.slug && bySlug.has(inferred.slug)) {
+        parentSlug = inferred.slug;
+      }
+    }
     if (parentSlug) bySlug.get(parentSlug).children.push(node);
     else roots.push(node);
   });

@@ -55,6 +55,7 @@ PRICE_RANGES = {
     "bags": (129, 459),
     "shoes": (250, 459),
     "watches": (450, 899),
+    "electronics": (99, 399),
     "glasses": (79, 189),
     "belts": (79, 139),
     "hats": (79, 119),
@@ -89,15 +90,18 @@ def _is_jewelry_like(product) -> bool:
 def price_for(product, floor):
     section = (product.get("section") or product.get("type_name") or "").strip().lower()
     category = (product.get("category") or "").strip().lower()
-    # Watches (incl. smart-watch / "All Watches") use the watches range + $450 floor.
+    # Watches (luxury watches only — not electronics/smart gadgets) use $450 floor.
     if (
-        "watch" in section
-        or category in ("watches", "watch", "smart-watch", "smartwatch")
+        ("watch" in section and "electronics" not in section and "smart" not in section)
+        or category in ("watches", "watch")
         or category.startswith("watches-")
         or category.startswith("watch-")
-    ):
+    ) and not category.startswith("electronics"):
         lo, hi = PRICE_RANGES["watches"]
         floor = max(float(floor), 450.0)
+    elif category.startswith("electronics") or "electronics" in section:
+        lo, hi = PRICE_RANGES["electronics"]
+        floor = max(float(floor), 99.0)
     elif _is_jewelry_like(product):
         lo, hi = PRICE_RANGES["jewelry"]
         floor = max(float(floor), 190.0)

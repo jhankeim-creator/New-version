@@ -117,9 +117,13 @@ class Category(BaseModel):
 
 class CategoryCreate(BaseModel):
     name: str
-    description: str
-    image: str
+    description: str = ""
+    image: str = ""
     slug: str
+    section: str = ""
+    section_slug: str = ""
+    parent: str = ""
+    parent_name: str = ""
 
 class Product(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -707,7 +711,7 @@ async def reset_password(token: str, new_password: str):
 
 @api_router.get("/categories", response_model=List[Category])
 async def get_categories():
-    categories = await db.categories.find({}, {"_id": 0}).to_list(100)
+    categories = await db.categories.find({}, {"_id": 0}).to_list(500)
     result = []
     for cat in categories:
         parse_from_mongo(cat)
@@ -1222,21 +1226,26 @@ def _is_shoe_product(product: dict) -> bool:
 
 
 def _is_watch_product(product: dict) -> bool:
-    """True when the product belongs to watches / smart-watch categories."""
+    """True when the product belongs to luxury watches (not electronics/smart-watch gadgets)."""
     cat = str(product.get("category") or "").strip().lower()
     section = str(product.get("section") or product.get("type_name") or "").strip().lower()
-    if cat in ("watches", "watch", "smart-watch", "smartwatch"):
+    # Electronics (earbuds, speakers, Apple Watch gadgets) have their own section.
+    if cat.startswith("electronics") or section in ("electronics", "all electronics"):
+        return False
+    if cat in ("smart-watch", "smartwatch"):
+        return False
+    if cat in ("watches", "watch"):
         return True
     if cat.startswith("watches-") or cat.startswith("watch-"):
         return True
-    if section in ("watches", "watch", "all watches", "smart watch", "smart-watch"):
+    if section in ("watches", "watch", "all watches"):
         return True
     tags = product.get("tags") or []
     if isinstance(tags, list):
         blob = " ".join(str(t) for t in tags).lower()
     else:
         blob = str(tags).lower()
-    if "watch" in blob:
+    if "watch" in blob and "smart" not in blob:
         return True
     return False
 

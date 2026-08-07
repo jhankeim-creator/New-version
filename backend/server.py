@@ -1176,6 +1176,31 @@ async def get_product(product_id: str):
 
 SHOES_MIN_PRICE = 250.0
 WATCHES_MIN_PRICE = 450.0
+JEWELRY_MIN_PRICE = 190.0
+JEWELRY_MAX_PRICE = 470.0
+
+_JEWELRY_CAT_ROOTS = (
+    "jewelry",
+    "necklace",
+    "bracelet",
+    "earrings",
+    "earring",
+    "ring",
+    "brooch",
+    "pendant",
+)
+_JEWELRY_SECTIONS = {
+    "all jewelry",
+    "jewelry",
+    "necklace",
+    "bracelet",
+    "earrings",
+    "earring",
+    "ring",
+    "brooch",
+    "other jewelry",
+    "jewelry-other",
+}
 
 
 def _is_shoe_product(product: dict) -> bool:
@@ -1216,6 +1241,38 @@ def _is_watch_product(product: dict) -> bool:
     return False
 
 
+def _is_jewelry_product(product: dict) -> bool:
+    """True for jewelry categories (necklace, bracelet, earrings, ring, brooch, …)."""
+    cat = str(product.get("category") or "").strip().lower()
+    section = str(product.get("section") or product.get("type_name") or "").strip().lower()
+    for root in _JEWELRY_CAT_ROOTS:
+        if cat == root or cat.startswith(f"{root}-"):
+            return True
+    if section in _JEWELRY_SECTIONS or "jewelry" in section:
+        return True
+    tags = product.get("tags") or []
+    if isinstance(tags, list):
+        blob = " ".join(str(t) for t in tags).lower()
+    else:
+        blob = str(tags).lower()
+    if any(k in blob for k in ("jewelry", "necklace", "bracelet", "earring", "brooch")):
+        return True
+    return False
+
+
+def _jewelry_band_price(product: dict) -> float:
+    """Deterministic retail price inside the jewelry $190–$470 band."""
+    import hashlib
+
+    lo = int(JEWELRY_MIN_PRICE)
+    hi = int(JEWELRY_MAX_PRICE)
+    seed = product.get("id") or product.get("source_id") or product.get("name") or "x"
+    h = int(hashlib.sha256(str(seed).encode("utf-8")).hexdigest(), 16)
+    whole = lo + (h % (hi - lo + 1))
+    price = float(f"{whole - 1}.99") if whole - 1 >= lo else float(f"{whole}.99")
+    return round(min(max(price, JEWELRY_MIN_PRICE), JEWELRY_MAX_PRICE), 2)
+
+
 def _apply_shoe_price_floor(product: dict) -> bool:
     """Raise shoe prices below the floor. Returns True if price was changed."""
     if not _is_shoe_product(product):
@@ -1244,12 +1301,35 @@ def _apply_watch_price_floor(product: dict) -> bool:
     return True
 
 
+def _apply_jewelry_price_band(product: dict) -> bool:
+    """Clamp jewelry prices into $190–$470. Returns True if price was changed."""
+    if not _is_jewelry_product(product):
+        return False
+    try:
+        price = float(product.get("price") or 0)
+    except (TypeError, ValueError):
+        price = 0.0
+    if price < JEWELRY_MIN_PRICE:
+        # Prefer a varied in-band price when unset/too low so the catalog
+        # does not collapse to a single $190 sticker.
+        product["price"] = (
+            _jewelry_band_price(product) if price <= 0 else float(JEWELRY_MIN_PRICE)
+        )
+        return True
+    if price > JEWELRY_MAX_PRICE:
+        product["price"] = float(JEWELRY_MAX_PRICE)
+        return True
+    return False
+
+
 def _apply_category_price_floors(product: dict) -> bool:
-    """Apply all category minimums (shoes, watches). Returns True if any change."""
+    """Apply category minimums/bands (shoes, watches, jewelry). Returns True if any change."""
     changed = False
     if _apply_shoe_price_floor(product):
         changed = True
     if _apply_watch_price_floor(product):
+        changed = True
+    if _apply_jewelry_price_band(product):
         changed = True
     return changed
 
@@ -1492,6 +1572,79 @@ async def enforce_watch_price_floor(
         "floor": floor,
         "updated": updated,
         "matched": len(products),
+    }
+
+
+@api_router.post("/products/maintenance/jewelry-price-band")
+async def enforce_jewelry_price_band(
+    apply: bool = False,
+    floor: float = JEWELRY_MIN_PRICE,
+    ceiling: float = JEWELRY_MAX_PRICE,
+    admin: User = Depends(get_current_admin),
+):
+    """Clamp jewelry products into ``floor``–``ceiling`` (default $190–$470).
+
+    Items below the floor get a deterministic in-band price (so the catalog
+    does not all become $190). Items above the ceiling are capped.
+    Dry-run by default; pass ``apply=true`` to write.
+    """
+    floor = float(max(floor, JEWELRY_MIN_PRICE))
+    ceiling = float(max(ceiling, floor))
+    products = await db.products.find(
+        {},
+        {"_id": 0, "id": 1, "name": 1, "price": 1, "category": 1, "section": 1,
+         "type_name": 1, "tags": 1, "source_id": 1},
+    ).to_list(length=None)
+
+    out_of_band = []
+    for p in products:
+        if not _is_jewelry_product(p):
+            continue
+        try:
+            price = float(p.get("price") or 0)
+        except (TypeError, ValueError):
+            price = 0.0
+        if price < floor:
+            new_price = _jewelry_band_price(p)
+            # Keep at least the floor; band helper already respects it.
+            new_price = max(new_price, floor)
+            out_of_band.append({**p, "_old": price, "_new": min(new_price, ceiling)})
+        elif price > ceiling:
+            out_of_band.append({**p, "_old": price, "_new": ceiling})
+
+    if not apply:
+        return {
+            "apply": False,
+            "floor": floor,
+            "ceiling": ceiling,
+            "would_update": len(out_of_band),
+            "sample": [
+                {
+                    "id": p["id"],
+                    "name": p.get("name"),
+                    "price": p.get("_old"),
+                    "new_price": p.get("_new"),
+                    "category": p.get("category"),
+                }
+                for p in out_of_band[:15]
+            ],
+        }
+
+    updated = 0
+    now = datetime.now(timezone.utc).isoformat()
+    for p in out_of_band:
+        res = await db.products.update_one(
+            {"id": p["id"]},
+            {"$set": {"price": float(p["_new"]), "updated_at": now}},
+        )
+        updated += res.modified_count
+
+    return {
+        "apply": True,
+        "floor": floor,
+        "ceiling": ceiling,
+        "updated": updated,
+        "matched": len(out_of_band),
     }
 
 

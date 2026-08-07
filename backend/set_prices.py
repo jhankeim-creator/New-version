@@ -45,13 +45,13 @@ except Exception:  # pragma: no cover
 # (min, max) retail range per section/type. All mins are >= the floor; the
 # floor is enforced again at the end so lowering ranges can never dip below it.
 PRICE_RANGES = {
-    "necklace": (85, 189),
-    "bracelet": (80, 159),
-    "earrings": (80, 139),
-    "ring": (85, 169),
-    "brooch": (80, 129),
-    "jewelry-other": (80, 149),
-    "jewelry": (80, 169),
+    "necklace": (190, 470),
+    "bracelet": (190, 470),
+    "earrings": (190, 470),
+    "ring": (190, 470),
+    "brooch": (190, 470),
+    "jewelry-other": (190, 470),
+    "jewelry": (190, 470),
     "bags": (129, 459),
     "shoes": (250, 459),
     "watches": (450, 899),
@@ -66,6 +66,25 @@ PRICE_RANGES = {
 }
 DEFAULT_RANGE = (80, 179)
 
+JEWELRY_SECTIONS = {
+    "necklace", "bracelet", "earrings", "earring", "ring", "brooch",
+    "jewelry-other", "jewelry", "all jewelry", "other jewelry",
+}
+JEWELRY_CAT_ROOTS = (
+    "jewelry", "necklace", "bracelet", "earrings", "earring", "ring", "brooch", "pendant",
+)
+
+
+def _is_jewelry_like(product) -> bool:
+    section = (product.get("section") or product.get("type_name") or "").strip().lower()
+    category = (product.get("category") or "").strip().lower()
+    if section in JEWELRY_SECTIONS or "jewelry" in section:
+        return True
+    for root in JEWELRY_CAT_ROOTS:
+        if category == root or category.startswith(f"{root}-"):
+            return True
+    return False
+
 
 def price_for(product, floor):
     section = (product.get("section") or product.get("type_name") or "").strip().lower()
@@ -79,6 +98,11 @@ def price_for(product, floor):
     ):
         lo, hi = PRICE_RANGES["watches"]
         floor = max(float(floor), 450.0)
+    elif _is_jewelry_like(product):
+        lo, hi = PRICE_RANGES["jewelry"]
+        floor = max(float(floor), 190.0)
+        # Jewelry band caps at $470.
+        hi = min(hi, 470)
     else:
         lo, hi = PRICE_RANGES.get(section, DEFAULT_RANGE)
     lo = int(max(lo, floor))
@@ -88,7 +112,10 @@ def price_for(product, floor):
     whole = lo + (h % (hi - lo + 1))
     # Price ends in .99, but never dip below the floor (e.g. floor 80 -> 80.99).
     price = float(f"{whole - 1}.99") if whole - 1 >= floor else float(f"{whole}.99")
-    return round(max(price, float(floor)), 2)
+    price = round(max(price, float(floor)), 2)
+    if _is_jewelry_like(product):
+        price = min(price, 470.0)
+    return price
 
 
 def main(argv=None):
@@ -112,10 +139,27 @@ def main(argv=None):
     query = {"price": {"$lte": 0}} if args.only_zero else {"price": {"$lt": args.floor}}
     products = list(db.products.find(query, {"_id": 0, "id": 1, "name": 1, "section": 1,
                                              "type_name": 1, "category": 1, "source_id": 1, "price": 1}))
-    # Also include watches below $450 even when the global --floor is lower.
+    # Also include watches below $450 / jewelry below $190 even when the global --floor is lower.
     if not args.only_zero and args.floor < 450:
         extra = list(db.products.find(
             {"price": {"$lt": 450}, "category": {"$regex": r"watch", "$options": "i"}},
+            {"_id": 0, "id": 1, "name": 1, "section": 1, "type_name": 1,
+             "category": 1, "source_id": 1, "price": 1},
+        ))
+        by_id = {p["id"]: p for p in products}
+        for p in extra:
+            by_id.setdefault(p["id"], p)
+        products = list(by_id.values())
+    if not args.only_zero and args.floor < 190:
+        jew_q = {
+            "price": {"$lt": 190},
+            "category": {
+                "$regex": r"^(jewelry|necklace|bracelet|earrings?|ring|brooch|pendant)",
+                "$options": "i",
+            },
+        }
+        extra = list(db.products.find(
+            jew_q,
             {"_id": 0, "id": 1, "name": 1, "section": 1, "type_name": 1,
              "category": 1, "source_id": 1, "price": 1},
         ))

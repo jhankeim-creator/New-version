@@ -88,6 +88,44 @@ const ProductPage = () => {
     path: canonicalProductPath,
   });
 
+  // Product JSON-LD helps Google when JS renders (complements bot prerender HTML).
+  useEffect(() => {
+    if (!product) return undefined;
+    const slug = product.slug || product.id;
+    const canonical = `https://kayee01.com/product/${slug}`;
+    const image = product.images?.[0] ? resolveImageUrl(product.images[0]) : undefined;
+    const schema = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: product.name,
+      description: product.meta_description || product.description || product.name,
+      image: image ? [image] : undefined,
+      sku: product.id || slug,
+      brand: { '@type': 'Brand', name: product.brand || 'Kayee01' },
+      offers: {
+        '@type': 'Offer',
+        url: canonical,
+        priceCurrency: 'USD',
+        price: Number(product.price || 0).toFixed(2),
+        availability:
+          Number(product.stock || 0) > 0
+            ? 'https://schema.org/InStock'
+            : 'https://schema.org/OutOfStock',
+      },
+    };
+    let el = document.getElementById('product-jsonld');
+    if (!el) {
+      el = document.createElement('script');
+      el.type = 'application/ld+json';
+      el.id = 'product-jsonld';
+      document.head.appendChild(el);
+    }
+    el.textContent = JSON.stringify(schema);
+    return () => {
+      el?.remove();
+    };
+  }, [product]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">

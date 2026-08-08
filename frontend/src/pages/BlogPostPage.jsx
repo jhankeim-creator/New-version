@@ -30,9 +30,10 @@ const BlogPostPage = () => {
 
   useSeo({
     title: post?.title,
-    description: post?.excerpt,
+    description: post?.excerpt || (post ? undefined : 'This article is no longer available.'),
     image: post?.cover_image ? resolveImageUrl(post.cover_image) : undefined,
-    path: `/blog/${slug}`,
+    path: post ? `/blog/${slug}` : '/blog',
+    noindex: !loading && !post,
   });
 
   return (

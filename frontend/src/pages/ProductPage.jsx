@@ -18,6 +18,7 @@ const ProductPage = () => {
   const [selectedImage, setSelectedImage] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
   const [selectedVariants, setSelectedVariants] = useState({});
   const navigate = useNavigate();
 
@@ -29,10 +30,11 @@ const ProductPage = () => {
     try {
       const response = await axios.get(`${API}/products/${id}`);
       setProduct(response.data);
+      setNotFound(false);
     } catch (error) {
       console.error('Failed to load product:', error);
-      toast.error('Product not found');
-      navigate('/shop');
+      setProduct(null);
+      setNotFound(true);
     } finally {
       setLoading(false);
     }
@@ -81,12 +83,55 @@ const ProductPage = () => {
       : undefined;
 
   useSeo({
-    title: product?.meta_title || product?.name,
-    description: product?.meta_description || product?.description,
+    title: notFound
+      ? 'Product not found'
+      : product?.meta_title || product?.name,
+    description: notFound
+      ? 'This product is no longer available on Kayee01.'
+      : product?.meta_description || product?.description,
     image: product?.images?.[0] ? resolveImageUrl(product.images[0]) : undefined,
     keywords: productKeywords(product),
-    path: canonicalProductPath,
+    path: notFound ? '/shop' : canonicalProductPath,
+    noindex: notFound,
   });
+
+  // Product JSON-LD helps Google when JS renders (complements bot prerender HTML).
+  useEffect(() => {
+    if (!product || notFound) return undefined;
+    const slug = product.slug || product.id;
+    const canonical = `https://kayee01.com/product/${slug}`;
+    const image = product.images?.[0] ? resolveImageUrl(product.images[0]) : undefined;
+    const schema = {
+      '@context': 'https://schema.org',
+      '@type': 'Product',
+      name: product.name,
+      description: product.meta_description || product.description || product.name,
+      image: image ? [image] : undefined,
+      sku: product.id || slug,
+      brand: { '@type': 'Brand', name: product.brand || 'Kayee01' },
+      offers: {
+        '@type': 'Offer',
+        url: canonical,
+        priceCurrency: 'USD',
+        price: Number(product.price || 0).toFixed(2),
+        availability:
+          Number(product.stock || 0) > 0
+            ? 'https://schema.org/InStock'
+            : 'https://schema.org/OutOfStock',
+      },
+    };
+    let el = document.getElementById('product-jsonld');
+    if (!el) {
+      el = document.createElement('script');
+      el.type = 'application/ld+json';
+      el.id = 'product-jsonld';
+      document.head.appendChild(el);
+    }
+    el.textContent = JSON.stringify(schema);
+    return () => {
+      el?.remove();
+    };
+  }, [product, notFound]);
 
   if (loading) {
     return (
@@ -96,7 +141,19 @@ const ProductPage = () => {
     );
   }
 
-  if (!product) return null;
+  if (notFound || !product) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center">
+        <h1 className="text-3xl font-semibold mb-3">Product not found</h1>
+        <p className="text-ink-muted mb-8 max-w-md">
+          This product is no longer available. It may have been removed or the link is outdated.
+        </p>
+        <Button onClick={() => navigate('/shop')} className="bg-[#d4af37] hover:bg-[#b8941f]">
+          Continue shopping
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">

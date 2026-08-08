@@ -32,6 +32,7 @@ import WhatsAppButton from './components/WhatsAppButton';
 import FloatingAnnouncement from './components/FloatingAnnouncement';
 import GoogleAnalytics from './components/GoogleAnalytics';
 import { SeoRouteGuard } from './lib/seo';
+import NotFoundPage from './pages/NotFoundPage';
 import { I18nProvider } from './i18n';
 import { buildCartKey } from './lib/variants';
 
@@ -228,6 +229,7 @@ function App() {
               <Route path="/forgot-password" element={<ForgotPassword />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/admin/*" element={<AdminDashboard />} />
+              <Route path="*" element={<NotFoundPage />} />
             </Routes>
             <WhatsAppButton />
             <FloatingAnnouncement />

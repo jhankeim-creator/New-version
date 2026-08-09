@@ -41,11 +41,12 @@ def main():
             except (TypeError, ValueError):
                 p["price"] = 250.0
         doc = {**p, "updated_at": now}
-        _id = doc.pop("_id", None)
+        doc.pop("_id", None)
+        created_at = doc.pop("created_at", None) or now
         ops.append(
             UpdateOne(
                 {"source_site": "tangma2088", "source_id": str(sid)},
-                {"$set": doc, "$setOnInsert": {"created_at": doc.get("created_at") or now}},
+                {"$set": doc, "$setOnInsert": {"created_at": created_at}},
                 upsert=True,
             )
         )

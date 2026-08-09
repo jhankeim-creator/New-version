@@ -114,9 +114,9 @@ def price_for(product, floor):
     seed = (product.get("id") or product.get("source_id") or product.get("name") or "x")
     h = int(hashlib.sha256(str(seed).encode("utf-8")).hexdigest(), 16)
     whole = lo + (h % (hi - lo + 1))
-    # Price ends in .99, but never dip below the floor (e.g. floor 80 -> 80.99).
-    price = float(f"{whole - 1}.99") if whole - 1 >= floor else float(f"{whole}.99")
-    price = round(max(price, float(floor)), 2)
+    # Price ends in .99, but never dip below the effective range minimum.
+    price = float(f"{whole - 1}.99") if whole - 1 >= lo else float(f"{whole}.99")
+    price = round(max(price, float(lo), float(floor)), 2)
     if _is_jewelry_like(product):
         price = min(price, 470.0)
     return price

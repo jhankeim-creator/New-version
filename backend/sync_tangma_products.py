@@ -84,7 +84,9 @@ LISTTIME_RE = re.compile(r'class="list-time">\s*([0-9]{4}-[0-9]{2}-[0-9]{2})')
 IMG_SRC_RE = re.compile(r'<img[^>]*\ssrc="([^"]+)"', re.S)
 PRODUCT_IMG_RE = re.compile(r'src="([^"]*upfile/product/[^"]+)"')
 CATEGORY_HREF_RE = re.compile(r'^category(?:en)?_(\d+)\.html')
-PRODUCT_HREF_RE = re.compile(r'^producten?_(\d+)_0\.html')
+PRODUCT_HREF_RE = re.compile(
+    r'^(?:producten?_(\d+)_0|productinfoen_(\d+))\.html'
+)
 
 ZH_MAP = {
     "短袖": "Short Sleeve", "短T": "T-Shirt", "短翻领": "Polo", "翻领": "Polo",
@@ -278,10 +280,10 @@ def parse_items(html):
             continue
         date_m = LISTTIME_RE.search(body)
         img_m = IMG_SRC_RE.search(body)
-        prod_m = PRODUCT_HREF_RE.match(href)
-        cat_m = CATEGORY_HREF_RE.match(href)
+        prod_m = PRODUCT_HREF_RE.match(href.split("?")[0])
+        cat_m = CATEGORY_HREF_RE.match(href.split("?")[0])
         if prod_m:
-            kind, sid = "product", prod_m.group(1)
+            kind, sid = "product", (prod_m.group(1) or prod_m.group(2))
         elif cat_m:
             kind, sid = "category", cat_m.group(1)
         else:
@@ -293,15 +295,31 @@ def parse_items(html):
         }
 
 
-def gallery_images(html, cap):
+def gallery_images(html, cap, source_id=None):
     urls, seen = [], set()
+    sid = str(source_id or "")
     for raw in PRODUCT_IMG_RE.findall(html):
+        # Prefer images that include this product's id in the filename when known
+        # (productinfoen pages sometimes list sibling thumbs).
+        if sid and sid not in raw and len(PRODUCT_IMG_RE.findall(html)) > 4:
+            # Keep only matching ids when the page is clearly a multi-thumb dump;
+            # otherwise fall through and keep everything.
+            continue
         enc = quote(raw, safe=":/?&=%")
         if enc not in seen:
             seen.add(enc)
             urls.append(enc)
         if cap and len(urls) >= cap:
             break
+    # Fallback: if filtering removed everything, take any product images.
+    if not urls and sid:
+        for raw in PRODUCT_IMG_RE.findall(html):
+            enc = quote(raw, safe=":/?&=%")
+            if enc not in seen:
+                seen.add(enc)
+                urls.append(enc)
+            if cap and len(urls) >= cap:
+                break
     return urls
 
 
@@ -482,7 +500,11 @@ def crawl(seeds, since_date, limit, per_root, per_category, per_album,
                 if per_album and album_counts.get(album_key, 0) >= per_album:
                     continue
                 try:
-                    images = gallery_images(fetch(urljoin(base, it["href"]), delay, session), max_images)
+                    images = gallery_images(
+                        fetch(urljoin(base, it["href"]), delay, session),
+                        max_images,
+                        source_id=it["id"],
+                    )
                 except RuntimeError as exc:
                     print(f"  ! skip product {it['href']}: {exc}", file=sys.stderr)
                     images = []

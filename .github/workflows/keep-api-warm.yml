@@ -1,0 +1,24 @@
+# Keep the Render free-tier API awake so Googlebot / sitemap fetches
+# do not hit cold-start 502/503 (reported in Search Console as 5xx).
+name: Keep API warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping API health + sitemap
+        run: |
+          set -e
+          for url in \
+            "https://api.kayee01.com/api/categories" \
+            "https://api.kayee01.com/sitemap.xml" \
+            "https://kayee01.com/sitemap.xml"
+          do
+            echo "GET $url"
+            curl -fsS -A "Kayee01-KeepWarm/1.0" --max-time 60 -o /dev/null -w "%{http_code} %{time_total}s\n" "$url" || true
+          done

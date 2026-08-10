@@ -3272,7 +3272,7 @@ async def sitemap_static():
         add(path, "weekly", pr)
 
     try:
-        categories = await db.categories.find({}, {"_id": 0, "slug": 1}).to_list(200)
+        categories = await db.categories.find({}, {"_id": 0, "slug": 1}).to_list(1000)
         for c in categories:
             if c.get("slug"):
                 add(f"/shop/{c['slug']}", "weekly", "0.7")
@@ -3334,6 +3334,16 @@ async def sitemap_blog():
     return _xml_response(_urlset(entries))
 
 
+def _seo_unavailable(message: str = "Temporarily unavailable") -> Response:
+    """Transient failure for crawlers — prefer 503 + Retry-After over opaque 500."""
+    return Response(
+        content=message,
+        status_code=503,
+        media_type="text/plain; charset=utf-8",
+        headers={"Retry-After": "60", "Cache-Control": "no-store"},
+    )
+
+
 @app.api_route("/seo/product/{ident}", methods=["GET", "HEAD"])
 async def seo_product_html(ident: str):
     """Bot-friendly HTML shell for product URLs (SPA has empty #root without JS).
@@ -3344,6 +3354,15 @@ async def seo_product_html(ident: str):
     UUID URLs redirect 301 to the slug canonical to avoid GSC "duplicate
     without user-selected canonical" / "page with redirect" from client JS.
     """
+    try:
+        return await _seo_product_html_impl(ident)
+    except HTTPException:
+        raise
+    except Exception:
+        return _seo_unavailable("Product SEO temporarily unavailable")
+
+
+async def _seo_product_html_impl(ident: str):
     from fastapi.responses import RedirectResponse
 
     product = await db.products.find_one({"slug": ident}, {"_id": 0})
@@ -3476,6 +3495,15 @@ async def seo_product_html(ident: str):
 @app.api_route("/seo/blog/{slug}", methods=["GET", "HEAD"])
 async def seo_blog_html(slug: str):
     """Bot-friendly HTML for published blog posts."""
+    try:
+        return await _seo_blog_html_impl(slug)
+    except HTTPException:
+        raise
+    except Exception:
+        return _seo_unavailable("Blog SEO temporarily unavailable")
+
+
+async def _seo_blog_html_impl(slug: str):
     posts = await db.blog_posts.find({"slug": slug, "published": True}, {"_id": 0}).limit(1).to_list(1)
     post = posts[0] if posts else None
     base = _public_base_url()

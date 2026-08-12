@@ -2,6 +2,7 @@ import { useEffect, useState, useContext, useMemo } from 'react';
 import { resolveImageUrl } from '../lib/utils';
 import { useSeo } from '../lib/seo';
 import { productKeywords } from '../lib/seo';
+import { offerMerchantFields } from '../lib/productOfferSchema';
 import { getProductVariantGroups, variantPriceDelta, cleanProductDescription } from '../lib/variants';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { CartContext } from '../App';
@@ -118,6 +119,7 @@ const ProductPage = () => {
           Number(product.stock || 0) > 0
             ? 'https://schema.org/InStock'
             : 'https://schema.org/OutOfStock',
+        ...offerMerchantFields('https://kayee01.com'),
       },
     };
     let el = document.getElementById('product-jsonld');

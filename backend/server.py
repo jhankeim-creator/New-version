@@ -3185,6 +3185,62 @@ def _seo_image_url(path: Optional[str]) -> str:
     return trimmed
 
 
+# Major destinations Kayee01 ships to (FAQ: worldwide). Used for Offer.shippingDetails.
+_SEO_SHIP_COUNTRIES = [
+    "US", "CA", "GB", "FR", "DE", "IT", "ES", "NL", "BE", "CH",
+    "AU", "HT", "DO", "MX", "BR", "JP",
+]
+
+
+def _offer_merchant_fields(base: Optional[str] = None) -> dict:
+    """Merchant listing fields Google warns about when missing under Offer.
+
+    Matches public policy pages:
+    - /refund-policy — 30-day returns; customer pays return shipping for change of mind
+    - /terms — free standard shipping, ~10–15 business days transit
+    """
+    site = (base or _public_base_url()).rstrip("/")
+    return {
+        "itemCondition": "https://schema.org/NewCondition",
+        "hasMerchantReturnPolicy": {
+            "@type": "MerchantReturnPolicy",
+            "applicableCountry": list(_SEO_SHIP_COUNTRIES),
+            "returnPolicyCategory": "https://schema.org/MerchantReturnFiniteReturnWindow",
+            "merchantReturnDays": 30,
+            "returnMethod": "https://schema.org/ReturnByMail",
+            "returnFees": "https://schema.org/ReturnFeesCustomerResponsibility",
+            "url": f"{site}/refund-policy",
+        },
+        "shippingDetails": {
+            "@type": "OfferShippingDetails",
+            "shippingRate": {
+                "@type": "MonetaryAmount",
+                "value": 0,
+                "currency": "USD",
+            },
+            "shippingDestination": {
+                "@type": "DefinedRegion",
+                "addressCountry": list(_SEO_SHIP_COUNTRIES),
+            },
+            "deliveryTime": {
+                "@type": "ShippingDeliveryTime",
+                "handlingTime": {
+                    "@type": "QuantitativeValue",
+                    "minValue": 1,
+                    "maxValue": 3,
+                    "unitCode": "DAY",
+                },
+                "transitTime": {
+                    "@type": "QuantitativeValue",
+                    "minValue": 7,
+                    "maxValue": 15,
+                    "unitCode": "DAY",
+                },
+            },
+        },
+    }
+
+
 def _xml_response(xml: str) -> Response:
     return Response(
         content=xml,
@@ -3439,6 +3495,7 @@ async def _seo_product_html_impl(ident: str):
             "priceCurrency": "USD",
             "price": f"{price:.2f}",
             "availability": availability,
+            **_offer_merchant_fields(base),
         },
     }
     if category:

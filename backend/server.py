@@ -28,6 +28,14 @@ from order_rules import (
     compute_items_subtotal,
     compute_order_total,
 )
+from bot_shield import (
+    should_block_request,
+    is_ai_scraper,
+    client_ip,
+    user_agent,
+    robots_txt_extra_blocks,
+    security_headers,
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -849,7 +857,16 @@ PUBLIC_PRODUCT_PAGE_MAX = 48
 
 def _sanitize_public_product(prod: dict) -> dict:
     """Strip fields that must never leave the API for anonymous scrapers."""
-    for key in ("cost", "download_url", "barcode"):
+    for key in (
+        "cost",
+        "download_url",
+        "barcode",
+        "source_id",
+        "source_url",
+        "import_batch",
+        "supplier",
+        "wholesale_price",
+    ):
         prod.pop(key, None)
     return prod
 
@@ -3892,10 +3909,12 @@ async def _seo_blog_html_impl(slug: str):
 async def robots():
     base = _public_base_url()
     body = (
+        f"{robots_txt_extra_blocks()}"
         "User-agent: *\n"
         "Allow: /\n"
         "Disallow: /admin\n"
         "Disallow: /admin/\n"
+        "Disallow: /api/\n"
         "Disallow: /cart\n"
         "Disallow: /checkout\n"
         "Disallow: /account\n"
@@ -3909,6 +3928,34 @@ async def robots():
     )
     return Response(content=body, media_type="text/plain")
 
+# --- Block AI scrapers from catalog / order endpoints ---
+@app.middleware("http")
+async def block_ai_scrapers(request: Request, call_next):
+    if should_block_request(request):
+        logger.warning(
+            "Blocked automated access path=%s ip=%s ua=%s",
+            request.url.path,
+            client_ip(request),
+            user_agent(request)[:160],
+        )
+        return Response(
+            content='{"detail":"Automated access is not permitted."}',
+            status_code=403,
+            media_type="application/json",
+            headers={**security_headers(), "X-Robots-Tag": "noindex, nofollow, noai, noimageai"},
+        )
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path or ""
+    if path.startswith("/api/") or path.startswith("/seo/"):
+        for key, value in security_headers().items():
+            response.headers.setdefault(key, value)
+    return response
+
 # --- Light anti-scrape rate limit (in-memory; resets on process restart) ---
 from collections import defaultdict
 import time as _time
@@ -3916,26 +3963,29 @@ import time as _time
 _rate_hits: dict = defaultdict(list)
 _RATE_WINDOW_SEC = 60
 _RATE_MAX_HITS = 90  # per IP / minute on sensitive list endpoints
+_RATE_MAX_HITS_SCRAPER = 20
 _RATE_PATH_PREFIXES = (
     "/api/products",
     "/api/v2/products",
     "/api/v2/media",
     "/api/blog",
+    "/api/orders",
+    "/api/categories",
 )
 
 
 @app.middleware("http")
 async def anti_export_rate_limit(request: Request, call_next):
     path = request.url.path or ""
-    if request.method == "GET" and any(path.startswith(p) for p in _RATE_PATH_PREFIXES):
-        # Prefer proxy headers when present (Render / Cloudflare).
-        fwd = (request.headers.get("cf-connecting-ip")
-               or request.headers.get("x-forwarded-for")
-               or "").split(",")[0].strip()
-        ip = fwd or (request.client.host if request.client else "unknown")
+    if request.method in ("GET", "HEAD", "POST") and any(
+        path.startswith(p) for p in _RATE_PATH_PREFIXES
+    ):
+        ip = client_ip(request)
+        ua = user_agent(request)
+        cap = _RATE_MAX_HITS_SCRAPER if is_ai_scraper(ua) else _RATE_MAX_HITS
         now = _time.time()
         bucket = [t for t in _rate_hits[ip] if now - t < _RATE_WINDOW_SEC]
-        if len(bucket) >= _RATE_MAX_HITS:
+        if len(bucket) >= cap:
             return Response(
                 content='{"detail":"Too many requests. Catalog export is rate-limited."}',
                 status_code=429,

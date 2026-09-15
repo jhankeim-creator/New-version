@@ -12,8 +12,13 @@
 
 const API_ORIGIN = "https://api.kayee01.com";
 
-const BOT_UA =
-  /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandex(bot|images)|facebookexternalhit|facebot|twitterbot|linkedinbot|embedly|quora link preview|pinterest|applebot|semrushbot|ahrefsbot|mj12bot|dotbot|petalbot|bytespider|gptbot|claudebot|amazonbot|discordbot|whatsapp|telegrambot|skypeuripreview|redditbot|rogerbot|screaming frog|chrome-lighthouse|lighthouse/i;
+// Search / social preview crawlers — may receive lightweight SEO HTML.
+const SEO_CRAWLER_UA =
+  /googlebot|bingbot|slurp|duckduckbot|baiduspider|yandex(bot|images)|facebookexternalhit|facebot|twitterbot|linkedinbot|embedly|quora link preview|pinterest|applebot|discordbot|whatsapp|telegrambot|skypeuripreview|redditbot|rogerbot|chrome-lighthouse|lighthouse/i;
+
+// AI / bulk scrapers — blocked from catalog HTML dumps.
+const AI_SCRAPER_UA =
+  /gptbot|chatgpt-user|oai-searchbot|claudebot|claude-web|anthropic-ai|google-extended|gemini|ccbot|cohere-ai|perplexitybot|youbot|bytespider|amazonbot|meta-externalagent|applebot-extended|diffbot|omgili|omgilibot|img2dataset|semrushbot|ahrefsbot|mj12bot|dotbot|petalbot|scrapy|python-requests|curl\/|wget\/|headlesschrome|phantomjs|selenium|puppeteer|playwright/i;
 
 export const config = {
   matcher: [
@@ -138,7 +143,20 @@ export default async function middleware(request) {
   }
 
   const ua = request.headers.get("user-agent") || "";
-  if (!BOT_UA.test(ua)) {
+
+  if (AI_SCRAPER_UA.test(ua) || (!ua.trim() && (pathname.startsWith("/product/") || pathname.startsWith("/blog/")))) {
+    return new Response("Automated access is not permitted.", {
+      status: 403,
+      headers: {
+        "content-type": "text/plain; charset=utf-8",
+        "cache-control": "no-store",
+        "x-robots-tag": "noindex, nofollow, noai, noimageai",
+        "x-kayee-seo": "ai-blocked",
+      },
+    });
+  }
+
+  if (!SEO_CRAWLER_UA.test(ua)) {
     return; // humans → normal SPA
   }
 

@@ -8,6 +8,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import CategoryTiles from '../components/CategoryTiles';
 import Footer from '../components/Footer';
+import SoldCountBadge from '../components/SoldCountBadge';
 import axios from 'axios';
 
 const HomePage = () => {
@@ -345,6 +346,7 @@ const HomePage = () => {
                 </div>
                 <CardContent className="p-4">
                   <h3 className="font-semibold text-base mb-2 line-clamp-2 min-h-[3rem]">{product.name}</h3>
+                  <SoldCountBadge product={product} className="mb-2" />
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <div className="flex items-center gap-2">
                       {product.on_sale && product.compare_at_price ? (

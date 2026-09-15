@@ -1,4 +1,4 @@
-// Purchase rules mirrored from backend/order_rules.py (MOQ + purchasability).
+// Storefront display rules mirrored from backend/order_rules.py.
 
 const JEWELRY_CAT_ROOTS = [
   'jewelry', 'necklace', 'bracelet', 'earrings', 'earring', 'ring', 'brooch', 'pendant',
@@ -8,15 +8,29 @@ const JEWELRY_SECTIONS = new Set([
   'other jewelry', 'jewelry-other',
 ]);
 
-export const WATCH_JEWELRY_MIN_ORDER_QTY = 5;
-export const WATCH_JEWELRY_MAX_ORDER_QTY = 70;
-export const BAGS_MIN_ORDER_QTY = 10;
-export const BAGS_MAX_ORDER_QTY = 50;
+export const WATCH_JEWELRY_SOLD_MIN = 5;
+export const WATCH_JEWELRY_SOLD_MAX = 70;
+export const BAGS_SOLD_MIN = 10;
+export const BAGS_SOLD_MAX = 50;
 
 function tagsBlob(product) {
   const tags = product?.tags;
   if (Array.isArray(tags)) return tags.join(' ').toLowerCase();
   return String(tags || '').toLowerCase();
+}
+
+function hashSeed(seed) {
+  let h = 0;
+  const s = String(seed);
+  for (let i = 0; i < s.length; i += 1) {
+    h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  }
+  return h;
+}
+
+function deterministicInt(seed, lo, hi) {
+  const span = hi - lo + 1;
+  return lo + (hashSeed(seed) % span);
 }
 
 export function isWatchProduct(product) {
@@ -55,19 +69,24 @@ export function isBagProduct(product) {
   return blob.includes('bag') || blob.includes('luggage');
 }
 
-export function getOrderQuantityLimits(product) {
-  if (typeof product?.min_order_quantity === 'number') {
-    const min = product.min_order_quantity;
-    const max = product.max_order_quantity ?? null;
-    return { min, max };
+export function getDisplaySalesCount(product) {
+  if (typeof product?.display_sales_count === 'number') {
+    return product.display_sales_count;
   }
+  const seed = product?.id || product?.source_id || product?.name || 'x';
   if (isBagProduct(product)) {
-    return { min: BAGS_MIN_ORDER_QTY, max: BAGS_MAX_ORDER_QTY };
+    return deterministicInt(seed, BAGS_SOLD_MIN, BAGS_SOLD_MAX);
   }
   if (isWatchProduct(product) || isJewelryProduct(product)) {
-    return { min: WATCH_JEWELRY_MIN_ORDER_QTY, max: WATCH_JEWELRY_MAX_ORDER_QTY };
+    return deterministicInt(seed, WATCH_JEWELRY_SOLD_MIN, WATCH_JEWELRY_SOLD_MAX);
   }
-  return { min: 0, max: null };
+  return 0;
+}
+
+export function soldCountLabel(product) {
+  const count = getDisplaySalesCount(product);
+  if (!count) return null;
+  return `${count} sold`;
 }
 
 export function isPurchasable(product, displayPrice) {
@@ -75,41 +94,4 @@ export function isPurchasable(product, displayPrice) {
   const price = Number(displayPrice ?? product?.price ?? 0);
   const stock = Number(product?.stock ?? 0);
   return price > 0 && stock > 0;
-}
-
-export function clampQuantity(product, quantity, displayPrice) {
-  const { min, max } = getOrderQuantityLimits(product);
-  const stock = Number(product?.stock ?? 0);
-  let qty = Math.max(0, Number(quantity) || 0);
-  if (min > 0) qty = Math.max(qty, min);
-  if (max != null) qty = Math.min(qty, max);
-  if (stock > 0) qty = Math.min(qty, stock);
-  if (!isPurchasable(product, displayPrice)) return 0;
-  return qty;
-}
-
-export function validateCartQuantity(product, quantity, displayPrice) {
-  const { min, max } = getOrderQuantityLimits(product);
-  const qty = Number(quantity) || 0;
-  if (!isPurchasable(product, displayPrice)) {
-    return 'This product is not available for purchase yet.';
-  }
-  if (qty < min) {
-    return min > 0 ? `Minimum order is ${min} units.` : 'Invalid quantity.';
-  }
-  if (max != null && qty > max) {
-    return `Maximum order is ${max} units.`;
-  }
-  const stock = Number(product?.stock ?? 0);
-  if (stock > 0 && qty > stock) {
-    return `Only ${stock} left in stock.`;
-  }
-  return null;
-}
-
-export function minOrderLabel(product) {
-  const { min, max } = getOrderQuantityLimits(product);
-  if (min <= 0) return null;
-  if (max != null) return `Minimum order: ${min} · Maximum: ${max}`;
-  return `Minimum order: ${min}`;
 }

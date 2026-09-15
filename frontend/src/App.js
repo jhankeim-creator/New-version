@@ -4,7 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { clampQuantity, getOrderQuantityLimits, validateCartQuantity } from './lib/orderRules';
+import { isPurchasable } from './lib/orderRules';
 
 // Components
 import Navbar from './components/Navbar';
@@ -88,9 +88,8 @@ function App() {
   };
 
   const addToCart = (product, quantity = 1, selectedVariants = null) => {
-    const qtyError = validateCartQuantity(product, quantity, product.price);
-    if (qtyError) {
-      toast.error(qtyError);
+    if (!isPurchasable(product, product.price)) {
+      toast.error('This product is not available for purchase yet.');
       return;
     }
 
@@ -101,22 +100,15 @@ function App() {
     let newCart;
 
     if (existingItem) {
-      const nextQty = clampQuantity(product, existingItem.quantity + quantity, product.price);
-      const mergedError = validateCartQuantity(product, nextQty, product.price);
-      if (mergedError) {
-        toast.error(mergedError);
-        return;
-      }
       newCart = cart.map(item =>
         keyOf(item) === cartKey
-          ? { ...item, quantity: nextQty }
+          ? { ...item, quantity: item.quantity + quantity }
           : item
       );
     } else {
-      const nextQty = clampQuantity(product, quantity, product.price);
       newCart = [
         ...cart,
-        { ...product, quantity: nextQty, cartKey, selectedVariants: hasVariants ? selectedVariants : null },
+        { ...product, quantity, cartKey, selectedVariants: hasVariants ? selectedVariants : null },
       ];
     }
 
@@ -126,27 +118,13 @@ function App() {
   };
 
   const updateCartQuantity = (cartKey, quantity) => {
-    const item = cart.find((entry) => (entry.cartKey || entry.id) === cartKey);
-    if (!item) return;
-
-    const { min } = getOrderQuantityLimits(item);
-    if (quantity <= 0 || quantity < min) {
+    if (quantity <= 0) {
       removeFromCart(cartKey);
-      if (min > 0) {
-        toast.info(`Removed — minimum order for this item is ${min}.`);
-      }
       return;
     }
 
-    const nextQty = clampQuantity(item, quantity, item.price);
-    const qtyError = validateCartQuantity(item, nextQty, item.price);
-    if (qtyError) {
-      toast.error(qtyError);
-      return;
-    }
-
-    const newCart = cart.map(entry =>
-      (entry.cartKey || entry.id) === cartKey ? { ...entry, quantity: nextQty } : entry
+    const newCart = cart.map(item =>
+      (item.cartKey || item.id) === cartKey ? { ...item, quantity } : item
     );
     setCart(newCart);
     localStorage.setItem('cart', JSON.stringify(newCart));

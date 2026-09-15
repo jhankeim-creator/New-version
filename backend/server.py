@@ -166,8 +166,7 @@ class Product(BaseModel):
     has_variants: bool = False
     variants: List[dict] = []
     variant_options: List[dict] = []
-    min_order_quantity: int = 0
-    max_order_quantity: Optional[int] = None
+    display_sales_count: int = 0
     purchasable: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -10,7 +10,7 @@ import Footer from '../components/Footer';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { CreditCard, Wallet, DollarSign, Truck, Banknote, ShieldCheck, Sparkles } from 'lucide-react';
-import { validateCartQuantity } from '../lib/orderRules';
+import { isPurchasable } from '../lib/orderRules';
 
 const COUNTRIES = [
   'United States', 'Canada', 'United Kingdom', 'France', 'Haiti', 'Dominican Republic',
@@ -159,9 +159,8 @@ const CheckoutPage = () => {
     setLoading(true);
 
     for (const item of cart) {
-      const qtyError = validateCartQuantity(item, item.quantity, item.price);
-      if (qtyError) {
-        toast.error(`${item.name}: ${qtyError}`);
+      if (!isPurchasable(item, item.price)) {
+        toast.error(`${item.name} is not available for purchase. Please remove it from your cart.`);
         setLoading(false);
         return;
       }

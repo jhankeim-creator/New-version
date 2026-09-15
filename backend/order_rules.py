@@ -1,7 +1,8 @@
-"""Purchase rules: category price floors, order quantity limits, and checkout validation."""
+"""Purchase rules: category price floors, checkout validation, and display sales counts."""
 
 from __future__ import annotations
 
+import hashlib
 from typing import Any, Dict, List, Optional, Tuple
 
 SHOES_MIN_PRICE = 250.0
@@ -9,10 +10,10 @@ WATCHES_MIN_PRICE = 450.0
 JEWELRY_MIN_PRICE = 190.0
 JEWELRY_MAX_PRICE = 470.0
 
-WATCH_JEWELRY_MIN_ORDER_QTY = 5
-WATCH_JEWELRY_MAX_ORDER_QTY = 70
-BAGS_MIN_ORDER_QTY = 10
-BAGS_MAX_ORDER_QTY = 50
+WATCH_JEWELRY_SOLD_MIN = 5
+WATCH_JEWELRY_SOLD_MAX = 70
+BAGS_SOLD_MIN = 10
+BAGS_SOLD_MAX = 50
 
 _JEWELRY_CAT_ROOTS = (
     "jewelry",
@@ -43,6 +44,11 @@ def _tags_blob(product: dict) -> str:
     if isinstance(tags, list):
         return " ".join(str(t) for t in tags).lower()
     return str(tags).lower()
+
+
+def _deterministic_int(seed: str, lo: int, hi: int) -> int:
+    h = int(hashlib.sha256(str(seed).encode("utf-8")).hexdigest(), 16)
+    return lo + (h % (hi - lo + 1))
 
 
 def is_shoe_product(product: dict) -> bool:
@@ -96,18 +102,18 @@ def is_bag_product(product: dict) -> bool:
     return "bag" in blob or "luggage" in blob
 
 
-def order_quantity_limits(product: dict) -> Tuple[int, Optional[int]]:
-    """Return (min_qty, max_qty). max_qty is None when there is no cap."""
+def display_sales_count(product: dict) -> int:
+    """Deterministic storefront 'already sold' count for social proof."""
+    seed = product.get("id") or product.get("source_id") or product.get("name") or "x"
     if is_bag_product(product):
-        return BAGS_MIN_ORDER_QTY, BAGS_MAX_ORDER_QTY
+        return _deterministic_int(seed, BAGS_SOLD_MIN, BAGS_SOLD_MAX)
     if is_watch_product(product) or is_jewelry_product(product):
-        return WATCH_JEWELRY_MIN_ORDER_QTY, WATCH_JEWELRY_MAX_ORDER_QTY
-    return 0, None
+        return _deterministic_int(seed, WATCH_JEWELRY_SOLD_MIN, WATCH_JEWELRY_SOLD_MAX)
+    return 0
 
 
 def apply_category_price_floors(product: dict) -> bool:
     """Raise/clamp prices to category minimums. Returns True if price changed."""
-    changed = False
     try:
         price = float(product.get("price") or 0)
     except (TypeError, ValueError):
@@ -126,7 +132,7 @@ def apply_category_price_floors(product: dict) -> bool:
         if price > JEWELRY_MAX_PRICE:
             product["price"] = float(JEWELRY_MAX_PRICE)
             return True
-    return changed
+    return False
 
 
 def variant_price_delta(product: dict, variant: Optional[dict]) -> float:
@@ -174,10 +180,8 @@ def is_purchasable(product: dict, variant: Optional[dict] = None) -> bool:
 
 
 def enrich_product_purchase_fields(product: dict) -> dict:
-    """Attach min/max order quantities and purchasable flag for API responses."""
-    min_q, max_q = order_quantity_limits(product)
-    product["min_order_quantity"] = min_q
-    product["max_order_quantity"] = max_q
+    """Attach storefront display fields for API responses."""
+    product["display_sales_count"] = display_sales_count(product)
     product["purchasable"] = is_purchasable(product)
     return product
 
@@ -197,11 +201,9 @@ def validate_line_item(
         errors.append(f"{name} is not available for purchase yet (invalid price).")
         return unit_price, errors
 
-    min_q, max_q = order_quantity_limits(product)
-    if quantity < min_q:
-        errors.append(f"Minimum order for {name} is {min_q}.")
-    if max_q is not None and quantity > max_q:
-        errors.append(f"Maximum order for {name} is {max_q}.")
+    if quantity <= 0:
+        errors.append(f"Invalid quantity for {name}.")
+        return unit_price, errors
 
     stock = int(product.get("stock") or 0)
     if quantity > stock:

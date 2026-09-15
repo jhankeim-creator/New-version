@@ -176,25 +176,35 @@ const CheckoutPage = () => {
     }
 
     try {
+      const cartItems = cart.map((item) => ({
+        product_id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        variant: item.selectedVariants || null,
+        image: item.images?.[0] || '',
+      }));
+
+      const quoteResponse = await axios.post(`${API}/orders/quote`, {
+        items: cartItems,
+        payment_method: formData.paymentMethod,
+        coupon_code: couponApplied ? couponCode : null,
+        shipping_method: shippingMethod,
+      });
+      const quote = quoteResponse.data || {};
+
       const notes = formatAnswersAsNotes(answers, cart);
       const orderData = {
         user_email: formData.email,
         user_name: formData.name,
-        items: cart.map((item) => ({
-          product_id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
-          variant: item.selectedVariants || null,
-          image: item.images?.[0] || '',
-        })),
-        total: finalTotal,
+        items: quote.items || cartItems,
+        total: quote.total,
         coupon_code: couponApplied ? couponCode : null,
-        discount_amount: couponDiscount,
-        crypto_discount: cryptoDiscount,
-        shipping_method: shippingMethod,
-        shipping_method_name: selectedShippingMethod?.name || null,
-        shipping_cost: shippingCost,
+        discount_amount: quote.discount_amount ?? 0,
+        crypto_discount: quote.crypto_discount ?? 0,
+        shipping_method: quote.shipping_method || shippingMethod,
+        shipping_method_name: quote.shipping_method_name || selectedShippingMethod?.name || null,
+        shipping_cost: quote.shipping_cost ?? 0,
         payment_method: formData.paymentMethod,
         shipping_address: {
           address: formData.address,

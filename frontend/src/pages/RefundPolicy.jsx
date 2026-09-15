@@ -89,13 +89,13 @@ const RefundPolicy = () => {
             <section>
               <h2 className="text-2xl font-bold mb-4">Refund Methods</h2>
               <p className="text-gray-700 leading-relaxed mb-4">
-                Refunds will be issued to the original payment method:
+                Approved refunds are issued to the original payment method when possible:
               </p>
               <ul className="list-disc ml-6 text-gray-700 space-y-2">
-                <li><strong>Credit/Debit Card:</strong> 5-7 business days</li>
-                <li><strong>PayPal:</strong> 3-5 business days</li>
-                <li><strong>Cryptocurrency:</strong> 2-3 business days</li>
-                <li><strong>Store Credit:</strong> Immediate (110% of original value)</li>
+                <li><strong>Credit/Debit Card:</strong> 5-10 business days after approval (bank processing times may vary)</li>
+                <li><strong>Bank / Manual Transfer:</strong> 5-10 business days after approval</li>
+                <li><strong>Cryptocurrency:</strong> Refunds may be issued to the original wallet or as store credit at our discretion. Processing typically takes 5-14 business days; network fees, exchange-rate changes, or blockchain delays are not refundable.</li>
+                <li><strong>Store Credit:</strong> Credited to your Kayee01 account at <strong>100% of the eligible refunded item value</strong> once the return is approved (or immediately when store credit is offered instead of a cash refund)</li>
               </ul>
             </section>
 
@@ -136,21 +136,27 @@ const RefundPolicy = () => {
             <section>
               <h2 className="text-2xl font-bold mb-4">Lost or Stolen Packages</h2>
               <p className="text-gray-700 leading-relaxed">
-                If your package is marked as delivered but you haven't received it:
+                If your package is marked as delivered but you have not received it:
               </p>
               <ul className="list-disc ml-6 text-gray-700 space-y-2">
-                <li>Check with neighbors or building management</li>
-                <li>Contact us within 24 hours</li>
-                <li>We will investigate with the carrier</li>
-                <li>Full refund or replacement if package cannot be located</li>
+                <li>Check with neighbors, household members, or building management first</li>
+                <li>Contact us within <strong>48 hours</strong> of the carrier&apos;s &quot;delivered&quot; scan with your order number</li>
+                <li>We will open an investigation with the carrier; this may take <strong>7-14 business days</strong></li>
+                <li>You may be asked to sign a declaration of non-receipt or file a report with the carrier</li>
+                <li>A refund or replacement is considered only after the carrier investigation is complete and the package is confirmed lost — not for theft after confirmed delivery to the address provided at checkout</li>
               </ul>
             </section>
 
             <section>
               <h2 className="text-2xl font-bold mb-4">Customs and Import Issues</h2>
-              <p className="text-gray-700 leading-relaxed">
-                If your package is held or seized by customs, please contact us immediately. We will work with you to resolve the issue or provide a full refund if the package cannot be delivered.
+              <p className="text-gray-700 leading-relaxed mb-4">
+                International orders may be subject to customs duties, taxes, or import fees charged by your country. Unless stated otherwise at checkout, <strong>these charges are the customer&apos;s responsibility</strong> and are not included in our product or shipping price.
               </p>
+              <ul className="list-disc ml-6 text-gray-700 space-y-2">
+                <li>If customs requests payment to release your package, contact us promptly — we will help where we can, but we cannot guarantee release</li>
+                <li>If you refuse to pay required duties and the shipment is returned to us or abandoned, a refund may be issued <strong>minus outbound shipping, handling, and any non-recoverable carrier or customs fees</strong></li>
+                <li>If a package is seized or destroyed by customs for reasons outside our control, we are not obligated to issue a full cash refund; we may offer store credit or a partial refund depending on the outcome</li>
+              </ul>
             </section>
 
             <section>
@@ -169,7 +175,7 @@ const RefundPolicy = () => {
 
             <div className="mt-6 p-6 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-600">
-                <strong>Last Updated:</strong> July 2026
+                <strong>Last Updated:</strong> March 2026
               </p>
             </div>
           </div>

@@ -4,6 +4,13 @@ import { useSeo } from '../lib/seo';
 import { productKeywords } from '../lib/seo';
 import { offerMerchantFields } from '../lib/productOfferSchema';
 import { getProductVariantGroups, variantPriceDelta, cleanProductDescription } from '../lib/variants';
+import {
+  clampQuantity,
+  getOrderQuantityLimits,
+  isPurchasable,
+  minOrderLabel,
+  validateCartQuantity,
+} from '../lib/orderRules';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
@@ -60,9 +67,26 @@ const ProductPage = () => {
     [variantGroups, selectedVariants]
   );
   const displayPrice = Math.max(0, (product?.price || 0) + priceDelta);
+  const orderLimits = useMemo(
+    () => (product ? getOrderQuantityLimits(product) : { min: 0, max: null }),
+    [product]
+  );
+  const canPurchase = product ? isPurchasable(product, displayPrice) : false;
+  const orderHint = product ? minOrderLabel(product) : null;
+
+  useEffect(() => {
+    if (!product) return;
+    const { min } = getOrderQuantityLimits(product);
+    setQuantity((prev) => clampQuantity(product, Math.max(prev, min || 1), displayPrice));
+  }, [product?.id, displayPrice]);
 
   const handleAddToCart = () => {
     if (!product || quantity <= 0) return;
+    const qtyError = validateCartQuantity(product, quantity, displayPrice);
+    if (qtyError) {
+      toast.error(qtyError);
+      return;
+    }
     // Require a choice for every variant axis before adding to cart.
     const missing = variantGroups.find((g) => !selectedVariants[g.name]);
     if (missing) {
@@ -295,11 +319,23 @@ const ProductPage = () => {
               {/* Quantity Selector */}
               <div className="mb-6">
                 <label className="block text-sm font-semibold mb-2">Quantity</label>
+                {orderHint && (
+                  <p className="text-sm text-amber-800 mb-2">{orderHint}</p>
+                )}
                 <div className="flex items-center space-x-4">
                     <Button
                       variant="outline"
                       size="icon"
-                      onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                      onClick={() =>
+                        setQuantity(
+                          clampQuantity(
+                            product,
+                            quantity - 1,
+                            displayPrice
+                          )
+                        )
+                      }
+                      disabled={quantity <= (orderLimits.min || 1)}
                       data-testid="decrease-quantity"
                     >
                       <Minus className="h-4 w-4" />
@@ -310,7 +346,18 @@ const ProductPage = () => {
                     <Button
                       variant="outline"
                       size="icon"
-                      onClick={() => setQuantity(quantity + 1)}
+                      onClick={() =>
+                        setQuantity(
+                          clampQuantity(
+                            product,
+                            quantity + 1,
+                            displayPrice
+                          )
+                        )
+                      }
+                      disabled={
+                        orderLimits.max != null && quantity >= orderLimits.max
+                      }
                       data-testid="increase-quantity"
                     >
                       <Plus className="h-4 w-4" />
@@ -318,11 +365,17 @@ const ProductPage = () => {
                   </div>
                 </div>
 
+              {!canPurchase && (
+                <p className="mb-4 text-sm font-medium text-red-600">
+                  This product is not available for purchase yet.
+                </p>
+              )}
+
               {/* Add to Cart Button */}
               <div className="flex space-x-4">
                 <Button
                   onClick={handleAddToCart}
-                  disabled={product.stock === 0}
+                  disabled={!canPurchase}
                   className="flex-1 btn-gold text-white py-6 text-lg rounded-full"
                   data-testid="add-to-cart-button"
                 >
@@ -334,7 +387,7 @@ const ProductPage = () => {
                     handleAddToCart();
                     navigate('/cart');
                   }}
-                  disabled={product.stock === 0}
+                  disabled={!canPurchase}
                   variant="outline"
                   className="flex-1 border-2 border-ink hover:bg-ink hover:text-white py-6 text-lg rounded-full"
                 >

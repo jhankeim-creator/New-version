@@ -21,6 +21,11 @@ from email_service import email_service
 from plisio_service import plisio_service
 from stripe_service import stripe_service
 from oauth_service import oauth_service
+from order_rules import (
+    enrich_product_purchase_fields,
+    validate_line_item,
+    compute_items_subtotal,
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -161,6 +166,9 @@ class Product(BaseModel):
     has_variants: bool = False
     variants: List[dict] = []
     variant_options: List[dict] = []
+    min_order_quantity: int = 0
+    max_order_quantity: Optional[int] = None
+    purchasable: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -840,6 +848,7 @@ def _sanitize_public_product(prod: dict) -> dict:
 
 def _product_response(prod: dict, *, public: bool = True) -> Product:
     parse_from_mongo(prod)
+    enrich_product_purchase_fields(prod)
     if public:
         _sanitize_public_product(prod)
     return Product(**prod)
@@ -904,6 +913,9 @@ async def get_products(
             query["price"]["$lte"] = float(max_price)
         if not query["price"]:
             query.pop("price", None)
+    elif not is_admin:
+        # Hide unpriced imports from the public storefront.
+        query["price"] = {"$gt": 0}
 
     # Allow simple sort param used by the frontend
     if sort:
@@ -1818,6 +1830,58 @@ async def backfill_variants_and_category_images(
 
 # ===== ORDER ROUTES =====
 
+async def _validate_and_price_order_items(items: List[dict]) -> tuple[List[dict], float]:
+    """Resolve server prices, enforce MOQ, and reject tampered checkout payloads."""
+    if not items:
+        raise HTTPException(status_code=400, detail="Cart is empty")
+
+    validated: List[dict] = []
+    errors: List[str] = []
+    for raw in items:
+        product_id = raw.get("product_id") or raw.get("id")
+        if not product_id:
+            errors.append("A cart item is missing its product id.")
+            continue
+
+        product = await db.products.find_one({"id": product_id}, {"_id": 0})
+        if not product:
+            errors.append(f"Product not found: {product_id}")
+            continue
+
+        try:
+            quantity = int(raw.get("quantity") or 0)
+        except (TypeError, ValueError):
+            quantity = 0
+        if quantity <= 0:
+            errors.append(f"Invalid quantity for {product.get('name', product_id)}.")
+            continue
+
+        variant = raw.get("variant")
+        try:
+            client_price = float(raw.get("price") or 0)
+        except (TypeError, ValueError):
+            client_price = 0.0
+
+        unit_price, line_errors = validate_line_item(product, quantity, client_price, variant)
+        errors.extend(line_errors)
+        if line_errors:
+            continue
+
+        validated.append({
+            **raw,
+            "product_id": product_id,
+            "name": raw.get("name") or product.get("name"),
+            "price": unit_price,
+            "quantity": quantity,
+            "variant": variant,
+        })
+
+    if errors:
+        raise HTTPException(status_code=400, detail="; ".join(errors))
+
+    return validated, compute_items_subtotal(validated)
+
+
 @api_router.post("/orders", response_model=Order)
 async def create_order(
     order_data: OrderCreate,
@@ -1825,11 +1889,47 @@ async def create_order(
 ):
     order_number = f"ORD-{str(uuid.uuid4())[:8].upper()}"
 
-    # Discount values are calculated client-side (UI) and persisted here.
-    # Avoid re-applying discounts server-side (prevents double-discount bugs).
-    total_amount = float(order_data.total)
-    crypto_discount = float(order_data.crypto_discount or 0.0) if order_data.payment_method == "plisio" else 0.0
-    discount_amount = float(order_data.discount_amount or 0.0)
+    validated_items, items_subtotal = await _validate_and_price_order_items(order_data.items)
+
+    # Recompute discounts from the server-side subtotal so clients cannot tamper totals.
+    discount_amount = 0.0
+    if order_data.coupon_code:
+        coupon = await db.coupons.find_one(
+            {"code": order_data.coupon_code, "active": True},
+            {"_id": 0},
+        )
+        if not coupon:
+            raise HTTPException(status_code=400, detail="Invalid coupon code")
+        coupon_obj = Coupon(**parse_from_mongo(coupon))
+        if coupon_obj.expires_at and coupon_obj.expires_at < datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="Coupon has expired")
+        if coupon_obj.max_uses and coupon_obj.used_count >= coupon_obj.max_uses:
+            raise HTTPException(status_code=400, detail="Coupon usage limit reached")
+        if items_subtotal < coupon_obj.min_purchase:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Minimum purchase of ${coupon_obj.min_purchase} required",
+            )
+        if coupon_obj.discount_type == "percentage":
+            discount_amount = items_subtotal * (coupon_obj.discount_value / 100)
+        else:
+            discount_amount = float(coupon_obj.discount_value)
+        discount_amount = min(discount_amount, items_subtotal)
+
+    crypto_discount = (
+        items_subtotal * 0.15 if order_data.payment_method == "plisio" else 0.0
+    )
+    shipping_cost = float(order_data.shipping_cost or 0.0)
+    total_amount = items_subtotal - discount_amount - crypto_discount + shipping_cost
+    if total_amount < 0:
+        total_amount = 0.0
+
+    client_total = float(order_data.total)
+    if abs(client_total - total_amount) > 0.05:
+        raise HTTPException(
+            status_code=400,
+            detail="Order total mismatch — refresh your cart and try again",
+        )
     
     # Get payment gateway instructions if it's a custom manual payment
     payment_gateway_instructions = ""
@@ -1852,11 +1952,13 @@ async def create_order(
     # Create order data dict and update with calculated values
     order_dict = order_data.model_dump()
     order_dict.update({
+        "items": validated_items,
         "order_number": order_number,
         "crypto_discount": crypto_discount,
         "discount_amount": discount_amount,
         "coupon_code": order_data.coupon_code,
         "total": total_amount,
+        "shipping_cost": shipping_cost,
         # Keep legacy `status` in sync with `order_status`
         "status": "pending",
         "payment_gateway_instructions": payment_gateway_instructions,

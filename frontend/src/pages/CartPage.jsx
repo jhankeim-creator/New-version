@@ -5,6 +5,7 @@ import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
 import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react';
 import Footer from '../components/Footer';
+import { getOrderQuantityLimits, minOrderLabel } from '../lib/orderRules';
 
 const CartPage = () => {
   const { cart, updateCartQuantity, removeFromCart, cartTotal } = useContext(CartContext);
@@ -52,6 +53,8 @@ const CartPage = () => {
             <div className="lg:col-span-2 space-y-4">
               {cart.map((item) => {
                 const key = item.cartKey || item.id;
+                const { min, max } = getOrderQuantityLimits(item);
+                const orderHint = minOrderLabel(item);
                 return (
                   <div
                     key={key}
@@ -77,7 +80,10 @@ const CartPage = () => {
                           ))}
                         </div>
                       )}
-                      <p className="text-[#d4af37] font-bold mb-2">${item.price.toFixed(2)}</p>
+                      <p className="text-[#d4af37] font-bold mb-1">${item.price.toFixed(2)}</p>
+                      {orderHint && (
+                        <p className="text-xs text-amber-800 mb-2">{orderHint}</p>
+                      )}
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="flex items-center gap-1">
                           <Button
@@ -85,6 +91,7 @@ const CartPage = () => {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => updateCartQuantity(key, item.quantity - 1)}
+                            disabled={item.quantity <= (min || 1)}
                             data-testid={`decrease-quantity-${item.id}`}
                           >
                             <Minus className="h-3 w-3" />
@@ -97,6 +104,7 @@ const CartPage = () => {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => updateCartQuantity(key, item.quantity + 1)}
+                            disabled={max != null && item.quantity >= max}
                             data-testid={`increase-quantity-${item.id}`}
                           >
                             <Plus className="h-3 w-3" />

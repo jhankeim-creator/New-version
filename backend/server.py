@@ -22,9 +22,11 @@ from plisio_service import plisio_service
 from stripe_service import stripe_service
 from oauth_service import oauth_service
 from order_rules import (
+    CRYPTO_DISCOUNT_RATE,
     enrich_product_purchase_fields,
     validate_line_item,
     compute_items_subtotal,
+    compute_order_total,
 )
 
 ROOT_DIR = Path(__file__).parent
@@ -341,6 +343,13 @@ class OrderCreate(BaseModel):
     phone: Optional[str] = ""
     notes: Optional[str] = None
     checkout_answers: Optional[dict] = None
+
+
+class CheckoutQuoteRequest(BaseModel):
+    items: List[dict]
+    payment_method: str = "manual"
+    coupon_code: Optional[str] = None
+    shipping_method: Optional[str] = "free"
 
 
 # ===== HELPER FUNCTIONS =====
@@ -1829,8 +1838,75 @@ async def backfill_variants_and_category_images(
 
 # ===== ORDER ROUTES =====
 
-async def _validate_and_price_order_items(items: List[dict]) -> tuple[List[dict], float]:
-    """Resolve server prices, enforce MOQ, and reject tampered checkout payloads."""
+async def _checkout_payment_method_ids(
+    *,
+    include_wallet: bool = False,
+) -> set[str]:
+    """Return payment method ids the storefront may use at checkout."""
+    settings = await db.admin_settings.find_one({"id": "admin_settings"}, {"_id": 0}) or {}
+    api = await db.api_settings.find_one({"_id": "global"}) or {}
+    core = settings.get("core_payment_methods") or {}
+    stripe_on = core.get("stripe", True)
+    plisio_on = core.get("plisio", True)
+    manual_on = core.get("manual", True)
+
+    has_stripe = bool(
+        (api.get("stripe_secret_key") or os.environ.get("STRIPE_SECRET_KEY") or "").strip()
+        and (api.get("stripe_publishable_key") or os.environ.get("STRIPE_PUBLISHABLE_KEY") or "").strip()
+    )
+    has_plisio = bool(
+        (api.get("plisio_api_key") or os.environ.get("PLISIO_API_KEY") or "").strip()
+    )
+
+    allowed: set[str] = set()
+    if stripe_on and has_stripe:
+        allowed.add("stripe")
+    if plisio_on and has_plisio:
+        allowed.add("plisio")
+    if manual_on:
+        allowed.add("manual")
+
+    for gateway in settings.get("payment_gateways", []) or []:
+        if not gateway.get("enabled", True):
+            continue
+        gid = gateway.get("gateway_id") or gateway.get("id")
+        if not gid:
+            continue
+        gtype = gateway.get("gateway_type") or "manual"
+        if gtype in ("stripe", "plisio") and gtype in allowed:
+            continue
+        allowed.add(f"manual-{gid}" if gtype == "manual" else gid)
+
+    if include_wallet:
+        allowed.add("wallet")
+    return allowed
+
+
+async def _resolve_shipping_method(shipping_method_id: Optional[str]) -> tuple[float, str]:
+    """Resolve shipping cost/name from admin settings; never trust client amounts."""
+    settings = await db.admin_settings.find_one({"id": "admin_settings"}, {"_id": 0})
+    methods = _sort_shipping_methods((settings or {}).get("shipping_methods", []))
+    enabled = [m for m in methods if m.get("enabled", True)]
+    method_id = (shipping_method_id or "free").strip() or "free"
+
+    if not enabled:
+        if method_id in ("free", "default"):
+            return 0.0, "Free Delivery"
+        raise HTTPException(status_code=400, detail="Invalid shipping method")
+
+    for method in enabled:
+        if method.get("id") == method_id:
+            return round(float(method.get("cost") or 0.0), 2), str(method.get("name") or "Delivery")
+
+    raise HTTPException(status_code=400, detail="Invalid shipping method")
+
+
+async def _validate_and_price_order_items(
+    items: List[dict],
+    *,
+    verify_client_prices: bool = True,
+) -> tuple[List[dict], float]:
+    """Resolve server prices and reject tampered checkout payloads."""
     if not items:
         raise HTTPException(status_code=400, detail="Cart is empty")
 
@@ -1851,34 +1927,122 @@ async def _validate_and_price_order_items(items: List[dict]) -> tuple[List[dict]
             quantity = int(raw.get("quantity") or 0)
         except (TypeError, ValueError):
             quantity = 0
-        if quantity <= 0:
-            errors.append(f"Invalid quantity for {product.get('name', product_id)}.")
-            continue
 
         variant = raw.get("variant")
-        try:
-            client_price = float(raw.get("price") or 0)
-        except (TypeError, ValueError):
-            client_price = 0.0
+        client_price = None
+        if verify_client_prices:
+            try:
+                client_price = float(raw.get("price") or 0)
+            except (TypeError, ValueError):
+                client_price = -1.0
 
-        unit_price, line_errors = validate_line_item(product, quantity, client_price, variant)
+        unit_price, line_errors = validate_line_item(
+            product, quantity, client_price, variant
+        )
         errors.extend(line_errors)
         if line_errors:
             continue
 
         validated.append({
-            **raw,
             "product_id": product_id,
             "name": raw.get("name") or product.get("name"),
             "price": unit_price,
             "quantity": quantity,
             "variant": variant,
+            "image": raw.get("image") or ((product.get("images") or [""])[0]),
         })
 
     if errors:
         raise HTTPException(status_code=400, detail="; ".join(errors))
 
     return validated, compute_items_subtotal(validated)
+
+
+async def _compute_coupon_discount(coupon_code: Optional[str], items_subtotal: float) -> float:
+    if not coupon_code:
+        return 0.0
+
+    coupon = await db.coupons.find_one(
+        {"code": coupon_code, "active": True},
+        {"_id": 0},
+    )
+    if not coupon:
+        raise HTTPException(status_code=400, detail="Invalid coupon code")
+
+    coupon_obj = Coupon(**parse_from_mongo(coupon))
+    if coupon_obj.expires_at and coupon_obj.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Coupon has expired")
+    if coupon_obj.max_uses and coupon_obj.used_count >= coupon_obj.max_uses:
+        raise HTTPException(status_code=400, detail="Coupon usage limit reached")
+    if items_subtotal < coupon_obj.min_purchase:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Minimum purchase of ${coupon_obj.min_purchase} required",
+        )
+
+    if coupon_obj.discount_type == "percentage":
+        discount_amount = items_subtotal * (coupon_obj.discount_value / 100)
+    else:
+        discount_amount = float(coupon_obj.discount_value)
+    return round(min(discount_amount, items_subtotal), 2)
+
+
+async def _build_checkout_quote(
+    items: List[dict],
+    payment_method: str,
+    coupon_code: Optional[str],
+    shipping_method: Optional[str],
+    *,
+    include_wallet: bool = False,
+    verify_client_prices: bool = True,
+) -> dict:
+    allowed_methods = await _checkout_payment_method_ids(include_wallet=include_wallet)
+    if payment_method not in allowed_methods:
+        raise HTTPException(status_code=400, detail="Invalid payment method")
+
+    validated_items, items_subtotal = await _validate_and_price_order_items(
+        items,
+        verify_client_prices=verify_client_prices,
+    )
+    discount_amount = await _compute_coupon_discount(coupon_code, items_subtotal)
+    crypto_discount = (
+        round(items_subtotal * CRYPTO_DISCOUNT_RATE, 2)
+        if payment_method == "plisio"
+        else 0.0
+    )
+    shipping_cost, shipping_name = await _resolve_shipping_method(shipping_method)
+    total_amount = compute_order_total(
+        items_subtotal, discount_amount, crypto_discount, shipping_cost
+    )
+
+    return {
+        "items": validated_items,
+        "items_subtotal": items_subtotal,
+        "discount_amount": discount_amount,
+        "crypto_discount": crypto_discount,
+        "shipping_cost": shipping_cost,
+        "shipping_method": shipping_method,
+        "shipping_method_name": shipping_name,
+        "payment_method": payment_method,
+        "coupon_code": coupon_code,
+        "total": total_amount,
+    }
+
+
+@api_router.post("/orders/quote")
+async def checkout_quote(
+    payload: CheckoutQuoteRequest,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+):
+    """Authoritative checkout pricing — clients must not trust local cart totals."""
+    return await _build_checkout_quote(
+        payload.items,
+        payload.payment_method,
+        payload.coupon_code,
+        payload.shipping_method,
+        include_wallet=bool(current_user),
+        verify_client_prices=True,
+    )
 
 
 @api_router.post("/orders", response_model=Order)
@@ -1888,40 +2052,22 @@ async def create_order(
 ):
     order_number = f"ORD-{str(uuid.uuid4())[:8].upper()}"
 
-    validated_items, items_subtotal = await _validate_and_price_order_items(order_data.items)
-
-    # Recompute discounts from the server-side subtotal so clients cannot tamper totals.
-    discount_amount = 0.0
-    if order_data.coupon_code:
-        coupon = await db.coupons.find_one(
-            {"code": order_data.coupon_code, "active": True},
-            {"_id": 0},
-        )
-        if not coupon:
-            raise HTTPException(status_code=400, detail="Invalid coupon code")
-        coupon_obj = Coupon(**parse_from_mongo(coupon))
-        if coupon_obj.expires_at and coupon_obj.expires_at < datetime.now(timezone.utc):
-            raise HTTPException(status_code=400, detail="Coupon has expired")
-        if coupon_obj.max_uses and coupon_obj.used_count >= coupon_obj.max_uses:
-            raise HTTPException(status_code=400, detail="Coupon usage limit reached")
-        if items_subtotal < coupon_obj.min_purchase:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Minimum purchase of ${coupon_obj.min_purchase} required",
-            )
-        if coupon_obj.discount_type == "percentage":
-            discount_amount = items_subtotal * (coupon_obj.discount_value / 100)
-        else:
-            discount_amount = float(coupon_obj.discount_value)
-        discount_amount = min(discount_amount, items_subtotal)
-
-    crypto_discount = (
-        items_subtotal * 0.15 if order_data.payment_method == "plisio" else 0.0
+    quote = await _build_checkout_quote(
+        order_data.items,
+        order_data.payment_method,
+        order_data.coupon_code,
+        order_data.shipping_method,
+        include_wallet=bool(current_user),
+        verify_client_prices=True,
     )
-    shipping_cost = float(order_data.shipping_cost or 0.0)
-    total_amount = items_subtotal - discount_amount - crypto_discount + shipping_cost
-    if total_amount < 0:
-        total_amount = 0.0
+
+    validated_items = quote["items"]
+    items_subtotal = quote["items_subtotal"]
+    discount_amount = quote["discount_amount"]
+    crypto_discount = quote["crypto_discount"]
+    shipping_cost = quote["shipping_cost"]
+    shipping_name = quote["shipping_method_name"]
+    total_amount = quote["total"]
 
     client_total = float(order_data.total)
     if abs(client_total - total_amount) > 0.05:
@@ -1929,6 +2075,17 @@ async def create_order(
             status_code=400,
             detail="Order total mismatch — refresh your cart and try again",
         )
+
+    client_discount = round(float(order_data.discount_amount or 0.0), 2)
+    client_crypto = round(float(order_data.crypto_discount or 0.0), 2)
+    if abs(client_discount - discount_amount) > 0.05:
+        raise HTTPException(status_code=400, detail="Invalid discount amount")
+    if abs(client_crypto - crypto_discount) > 0.05:
+        raise HTTPException(status_code=400, detail="Invalid crypto discount amount")
+
+    client_shipping = round(float(order_data.shipping_cost or 0.0), 2)
+    if abs(client_shipping - shipping_cost) > 0.05:
+        raise HTTPException(status_code=400, detail="Invalid shipping cost")
     
     # Get payment gateway instructions if it's a custom manual payment
     payment_gateway_instructions = ""
@@ -1958,6 +2115,7 @@ async def create_order(
         "coupon_code": order_data.coupon_code,
         "total": total_amount,
         "shipping_cost": shipping_cost,
+        "shipping_method_name": shipping_name or order_data.shipping_method_name,
         # Keep legacy `status` in sync with `order_status`
         "status": "pending",
         "payment_gateway_instructions": payment_gateway_instructions,

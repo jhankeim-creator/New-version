@@ -4,6 +4,8 @@ import { useSeo } from '../lib/seo';
 import { productKeywords } from '../lib/seo';
 import { offerMerchantFields } from '../lib/productOfferSchema';
 import { getProductVariantGroups, variantPriceDelta, cleanProductDescription } from '../lib/variants';
+import { isPurchasable } from '../lib/orderRules';
+import SoldCountBadge from '../components/SoldCountBadge';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
@@ -60,9 +62,14 @@ const ProductPage = () => {
     [variantGroups, selectedVariants]
   );
   const displayPrice = Math.max(0, (product?.price || 0) + priceDelta);
+  const canPurchase = product ? isPurchasable(product, displayPrice) : false;
 
   const handleAddToCart = () => {
     if (!product || quantity <= 0) return;
+    if (!canPurchase) {
+      toast.error('This product is not available for purchase yet.');
+      return;
+    }
     // Require a choice for every variant axis before adding to cart.
     const missing = variantGroups.find((g) => !selectedVariants[g.name]);
     if (missing) {
@@ -226,11 +233,14 @@ const ProductPage = () => {
                   <span className="text-xl text-gray-400 line-through">${product.compare_at_price.toFixed(2)}</span>
                 )}
               </div>
-              {typeof product.stock === 'number' && (
-                <p className={`mb-6 text-sm font-medium ${product.stock > 0 ? 'text-green-700' : 'text-red-600'}`}>
-                  {product.stock > 0 ? (product.stock <= 5 ? `Only ${product.stock} left in stock` : 'In stock') : 'Out of stock'}
-                </p>
-              )}
+              <div className="mb-6 flex flex-wrap items-center gap-3">
+                {typeof product.stock === 'number' && (
+                  <p className={`text-sm font-medium ${product.stock > 0 ? 'text-green-700' : 'text-red-600'}`}>
+                    {product.stock > 0 ? (product.stock <= 5 ? `Only ${product.stock} left in stock` : 'In stock') : 'Out of stock'}
+                  </p>
+                )}
+                <SoldCountBadge product={product} />
+              </div>
 
               {/* Size / Color selectors — above description so they are obvious */}
               {variantGroups.length > 0 && (
@@ -318,11 +328,17 @@ const ProductPage = () => {
                   </div>
                 </div>
 
+              {!canPurchase && (
+                <p className="mb-4 text-sm font-medium text-red-600">
+                  This product is not available for purchase yet.
+                </p>
+              )}
+
               {/* Add to Cart Button */}
               <div className="flex space-x-4">
                 <Button
                   onClick={handleAddToCart}
-                  disabled={product.stock === 0}
+                  disabled={!canPurchase}
                   className="flex-1 btn-gold text-white py-6 text-lg rounded-full"
                   data-testid="add-to-cart-button"
                 >
@@ -334,7 +350,7 @@ const ProductPage = () => {
                     handleAddToCart();
                     navigate('/cart');
                   }}
-                  disabled={product.stock === 0}
+                  disabled={!canPurchase}
                   variant="outline"
                   className="flex-1 border-2 border-ink hover:bg-ink hover:text-white py-6 text-lg rounded-full"
                 >

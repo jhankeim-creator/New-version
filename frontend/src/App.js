@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
+import { isPurchasable } from './lib/orderRules';
 
 // Components
 import Navbar from './components/Navbar';
@@ -87,6 +88,11 @@ function App() {
   };
 
   const addToCart = (product, quantity = 1, selectedVariants = null) => {
+    if (!isPurchasable(product, product.price)) {
+      toast.error('This product is not available for purchase yet.');
+      return;
+    }
+
     const hasVariants = selectedVariants && Object.keys(selectedVariants).length > 0;
     const cartKey = buildCartKey(product.id, hasVariants ? selectedVariants : null);
     const keyOf = (item) => item.cartKey || item.id;

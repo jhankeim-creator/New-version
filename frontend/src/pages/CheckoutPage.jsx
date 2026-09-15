@@ -10,6 +10,7 @@ import Footer from '../components/Footer';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { CreditCard, Wallet, DollarSign, Truck, Banknote, ShieldCheck, Sparkles } from 'lucide-react';
+import { isPurchasable } from '../lib/orderRules';
 
 const COUNTRIES = [
   'United States', 'Canada', 'United Kingdom', 'France', 'Haiti', 'Dominican Republic',
@@ -156,6 +157,14 @@ const CheckoutPage = () => {
       return;
     }
     setLoading(true);
+
+    for (const item of cart) {
+      if (!isPurchasable(item, item.price)) {
+        toast.error(`${item.name} is not available for purchase. Please remove it from your cart.`);
+        setLoading(false);
+        return;
+      }
+    }
 
     // Require color answer when the product didn't already pick one in cart.
     for (const { item, key, hasColor } of itemQuestions) {

@@ -1,6 +1,7 @@
 import { useEffect, useState, useContext, useMemo } from 'react';
 import { resolveImageUrl, categoryParent, buildCategoryTree, findCategoryNode, displayCategoryName } from '../lib/utils';
 import { useSeo } from '../lib/seo';
+import SoldCountBadge from '../components/SoldCountBadge';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { CartContext } from '../App';
 import { Button } from '../components/ui/button';
@@ -417,6 +418,7 @@ const ShopPage = () => {
                       </div>
                       <CardContent className="p-4">
                         <h3 className="font-semibold text-base mb-2 line-clamp-2 min-h-[3rem]">{product.name}</h3>
+                        <SoldCountBadge product={product} className="mb-2" />
                         <div className="flex items-center justify-between gap-2 mb-2">
                           <div className="flex items-center gap-2">
                             {product.on_sale && product.compare_at_price ? (
